@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Voice Authentication | Local Biometric Engine</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- Top App Navigation & Status -->
+    <header class="app-header">
+        <div class="header-container">
+            <div class="brand-group">
+                <div class="brand-icon">🎙️</div>
+                <div class="brand-text">
+                    <h1>Customer Voice Authentication</h1>
+                    <p>1:1 Biometric Verification Engine • Local Local Prototype</p>
+                </div>
+            </div>
+            <div class="header-badges">
+                <span class="badge-pill">ECAPA-TDNN</span>
+                <span class="badge-pill">192-dim Vector</span>
+                <span id="model-status-badge" class="badge-pill">Initializing...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Application Container -->
+    <main class="main-wrapper">
+
+        <!-- Top Non-Production Disclaimer -->
+        <div class="disclaimer-banner">
+            <span style="font-size: 18px;">⚠️</span>
+            <div>
+                <strong>Educational Prototype Notice:</strong> This system is an internship-level academic prototype 
+                exploring deep representation learning and decision boundaries. 
+                <strong>It must NOT be used to authenticate real bank customers or authorize financial transactions.</strong>
+            </div>
+        </div>
+
+        <!-- Segmented Tab Navigation -->
+        <nav class="tab-navigation">
+            <button class="tab-btn active" data-tab="tab-volunteer">
+                <span>👤</span> Volunteer Verification Demo
+            </button>
+            <button class="tab-btn" data-tab="tab-evaluation">
+                <span>📊</span> Corpus Evaluation (LibriSpeech)
+            </button>
+        </nav>
+
+        <!-- ========================================================================= -->
+        <!-- TAB 1: VOLUNTEER VERIFICATION DEMO                                        -->
+        <!-- ========================================================================= -->
+        <section id="tab-volunteer" class="tab-panel active">
+
+            <!-- Step 0: Informed Consent Gate -->
+            <div class="consent-card">
+                <div class="consent-header">
+                    <span>🛡️</span> Informed Consent & Privacy Governance
+                </div>
+                <div class="consent-grid">
+                    <div class="consent-item">
+                        <span class="icon">✓</span>
+                        <div><strong>Strictly Local Processing:</strong> Audio signals and embeddings never leave your local computer.</div>
+                    </div>
+                    <div class="consent-item">
+                        <span class="icon">✓</span>
+                        <div><strong>No Audio Retention by Default:</strong> Raw voice audio is discarded immediately after feature extraction.</div>
+                    </div>
+                    <div class="consent-item">
+                        <span class="icon">✓</span>
+                        <div><strong>Instant Purging:</strong> You have full rights to permanently delete your enrolled profile at any time.</div>
+                    </div>
+                    <div class="consent-item">
+                        <span class="icon">✓</span>
+                        <div><strong>Anonymized Identifiers:</strong> Data is organized under anonymous IDs without personal details.</div>
+                    </div>
+                </div>
+                <div class="consent-checkbox-wrap">
+                    <input type="checkbox" id="consent-checkbox">
+                    <label for="consent-checkbox">
+                        I voluntarily consent to having my voice recording processed locally for this educational demonstration.
+                    </label>
+                </div>
+            </div>
+
+            <!-- Enrollment & Verification 2-Column Grid -->
+            <div class="grid-2col">
+
+                <!-- Step 1: Speaker Enrollment Card -->
+                <div class="panel-card consent-dependent locked">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <span class="step-bubble">1</span>
+                            <div>
+                                <h3 class="card-title">Speaker Enrollment</h3>
+                                <p class="card-subtitle">Register a voice profile. Extracts a 192-dim vector without model training.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="demo-id-input">Demo Speaker Identifier</label>
+                        <div class="input-row">
+                            <input type="text" id="demo-id-input" class="input-field" placeholder="VOL-XXXX" autocomplete="off">
+                            <button id="gen-id-btn" class="btn btn-secondary" title="Generate New Anonymized ID">New ID</button>
+                        </div>
+                        <p class="form-hint">Randomized ID used to store the biometric template.</p>
+                    </div>
+
+                    <!-- Input Mode Toggle (Mic vs Upload) -->
+                    <div class="input-mode-toggle">
+                        <button id="enroll-mode-mic" class="mode-btn active">
+                            <span>🎙️</span> Record Microphone
+                        </button>
+                        <button id="enroll-mode-upload" class="mode-btn">
+                            <span>📁</span> Upload Audio File
+                        </button>
+                    </div>
+
+                    <!-- Microphone Recorder Box -->
+                    <div id="enroll-mic-box" class="recorder-box">
+                        <canvas id="enroll-canvas" class="visualizer-canvas" width="400" height="60"></canvas>
+                        <div class="rec-controls">
+                            <button id="enroll-rec-btn" class="rec-btn start-rec" title="Click to Record">🎙️</button>
+                            <span id="enroll-rec-timer" class="rec-timer">00:00</span>
+                        </div>
+                        <p class="form-hint" style="margin-top: 8px;">Click to record. Speak clearly for at least 1.0 second, then click stop.</p>
+                        <audio id="enroll-audio-preview" class="audio-preview-player" controls style="display: none;"></audio>
+                        <div id="enroll-rec-actions" style="display: none; margin-top: 10px; gap: 8px; justify-content: center;">
+                            <button type="button" id="enroll-retry-btn" class="btn btn-secondary btn-sm">🔁 Retry Recording</button>
+                            <button type="button" id="enroll-clear-btn" class="btn btn-secondary btn-sm">🗑️ Clear</button>
+                        </div>
+                    </div>
+
+                    <!-- File Upload Box (Fallback) -->
+                    <div id="enroll-upload-box" class="recorder-box" style="display: none;">
+                        <div id="enroll-dropzone" class="dropzone">
+                            <div class="dropzone-icon">📁</div>
+                            <div class="dropzone-text">Click or drag audio file here</div>
+                            <div class="dropzone-sub">Supports .wav, .flac, .mp3, .ogg (minimum 1.0s)</div>
+                            <input type="file" id="enroll-file-input" accept=".wav,.flac,.mp3,.ogg,audio/*">
+                            <div id="enroll-selected-pill" class="selected-file-pill" style="display: none;"></div>
+                        </div>
+                    </div>
+
+                    <button id="enroll-submit-btn" class="btn btn-primary btn-block" disabled>
+                        Enroll Voice Profile
+                    </button>
+
+                    <div id="enroll-result-card" class="panel-card" style="margin-top: 14px; padding: 12px; display: none; background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3);"></div>
+                </div>
+
+                <!-- Step 2: 1:1 Voice Verification Card -->
+                <div class="panel-card consent-dependent locked">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <span class="step-bubble">2</span>
+                            <div>
+                                <h3 class="card-title">1:1 Voice Verification</h3>
+                                <p class="card-subtitle">Compare a new candidate voice sample with an enrolled template.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="verify-target-select">Select Enrolled Speaker ID</label>
+                        <select id="verify-target-select" class="select-field">
+                            <option value="">-- No enrolled profiles (Complete Step 1) --</option>
+                        </select>
+                    </div>
+
+                    <!-- Input Mode Toggle (Mic vs Upload) -->
+                    <div class="input-mode-toggle">
+                        <button id="verify-mode-mic" class="mode-btn active">
+                            <span>🎙️</span> Record Candidate
+                        </button>
+                        <button id="verify-mode-upload" class="mode-btn">
+                            <span>📁</span> Upload Candidate File
+                        </button>
+                    </div>
+
+                    <!-- Microphone Recorder Box -->
+                    <div id="verify-mic-box" class="recorder-box">
+                        <canvas id="verify-canvas" class="visualizer-canvas" width="400" height="60"></canvas>
+                        <div class="rec-controls">
+                            <button id="verify-rec-btn" class="rec-btn start-rec" title="Click to Record">🎙️</button>
+                            <span id="verify-rec-timer" class="rec-timer">00:00</span>
+                        </div>
+                        <p class="form-hint" style="margin-top: 8px;">Record candidate voice (same speaker for Match, different for Imposter).</p>
+                        <audio id="verify-audio-preview" class="audio-preview-player" controls style="display: none;"></audio>
+                        <div id="verify-rec-actions" style="display: none; margin-top: 10px; gap: 8px; justify-content: center;">
+                            <button type="button" id="verify-retry-btn" class="btn btn-secondary btn-sm">🔁 Retry Recording</button>
+                            <button type="button" id="verify-clear-btn" class="btn btn-secondary btn-sm">🗑️ Clear</button>
+                        </div>
+                    </div>
+
+                    <!-- File Upload Box (Fallback) -->
+                    <div id="verify-upload-box" class="recorder-box" style="display: none;">
+                        <div id="verify-dropzone" class="dropzone">
+                            <div class="dropzone-icon">📁</div>
+                            <div class="dropzone-text">Click or drag candidate file here</div>
+                            <div class="dropzone-sub">Supports .wav, .flac, .mp3, .ogg</div>
+                            <input type="file" id="verify-file-input" accept=".wav,.flac,.mp3,.ogg,audio/*">
+                            <div id="verify-selected-pill" class="selected-file-pill" style="display: none;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Threshold Slider -->
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Decision Threshold (Cosine Metric):</span>
+                            <span id="threshold-value-display" class="slider-val">0.25</span>
+                        </div>
+                        <input type="range" id="threshold-slider" class="slider-input" min="-0.50" max="0.90" step="0.01" value="0.25">
+                        <p class="form-hint">
+                            Notice: Cosine similarity is a geometric angular distance in [-1.0, 1.0], NOT an identity probability. No threshold is universally typical.
+                        </p>
+                    </div>
+
+                    <button id="verify-submit-btn" class="btn btn-primary btn-block" disabled>
+                        Verify Candidate Voice
+                    </button>
+
+                    <!-- Verification Decision Card -->
+                    <div id="decision-card" class="decision-card" style="display: none;"></div>
+                </div>
+
+            </div>
+
+            <!-- Step 3: Template Governance & Data Purging -->
+            <div class="panel-card consent-dependent locked">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <span class="step-bubble">3</span>
+                        <div>
+                            <h3 class="card-title">Enrolled Profiles & Data Governance</h3>
+                            <p class="card-subtitle">Review stored biometric representations or permanently purge profiles from local storage.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="volunteers-empty-notice" style="font-size: 13px; color: var(--text-muted); padding: 12px 0;">
+                    No volunteer profiles currently enrolled on this system.
+                </div>
+
+                <div class="data-table-container">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>Demo ID</th>
+                                <th>Enrolled (UTC)</th>
+                                <th>Duration</th>
+                                <th>Biometric Template</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="volunteers-table-body">
+                            <!-- Populated dynamically via app.js -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ========================================================================= -->
+        <!-- TAB 2: LIBRISPEECH CORPUS EVALUATION                                      -->
+        <!-- ========================================================================= -->
+        <section id="tab-evaluation" class="tab-panel">
+
+            <div class="disclaimer-banner" style="background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3); border-left-color: var(--accent-emerald); color: #A7F3D0;">
+                <span style="font-size: 18px;">📚</span>
+                <div>
+                    <strong>Corpus Benchmark Notice:</strong> LibriSpeech contains high-fidelity audiobook recordings and 
+                    does <strong>NOT</strong> reflect telephone banking audio (which has 8 kHz band-pass compression, codecs, and background noise). 
+                    <strong>The official project dataset will be provided by HCL at a later stage.</strong>
+                </div>
+            </div>
+
+            <div class="panel-card" style="margin-bottom: 24px;">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <span class="step-bubble">📁</span>
+                        <div>
+                            <h3 class="card-title">External LibriSpeech Directory</h3>
+                            <p class="card-subtitle">Enter the absolute path to your locally extracted `LibriSpeech` or `test-clean` folder.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="input-row">
+                        <input type="text" id="eval-path-input" class="input-field" placeholder="e.g. C:\Users\ishan\Downloads\LibriSpeech\test-clean">
+                        <button id="eval-validate-btn" class="btn btn-secondary">Inspect Folder</button>
+                    </div>
+                    <p class="form-hint">Folder is scanned in-place; files are not moved or copied.</p>
+                </div>
+
+                <div id="eval-validation-notice" style="display: none; margin-top: 10px;"></div>
+            </div>
+
+            <div class="panel-card">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <span class="step-bubble">⚙️</span>
+                        <div>
+                            <h3 class="card-title">Evaluation Configuration & Execution</h3>
+                            <p class="card-subtitle">Construct balanced genuine (same-speaker) and imposter (different-speaker) trial pairs.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid-2col" style="margin-bottom: 14px;">
+                    <div class="form-group">
+                        <label class="form-label" for="eval-genuine-input">Number of Genuine Trials (Same-Speaker)</label>
+                        <input type="number" id="eval-genuine-input" class="input-field" value="20" min="5" max="200" step="5">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="eval-imposter-input">Number of Imposter Trials (Different-Speakers)</label>
+                        <input type="number" id="eval-imposter-input" class="input-field" value="20" min="5" max="200" step="5">
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 18px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-primary); cursor: pointer;">
+                        <input type="checkbox" id="eval-split-checkbox" checked style="accent-color: var(--accent-cyan); width: 16px; height: 16px;">
+                        <span><strong>Enable Calibration / Test Split Protocol</strong> (Calibrate threshold on Dev partition, evaluate on separate Test partition)</span>
+                    </label>
+                </div>
+
+                <button id="eval-run-btn" class="btn btn-primary">
+                    Run Evaluation on Actual Trials
+                </button>
+
+                <!-- Progress Bar -->
+                <div id="eval-progress-wrap" style="display: none; margin-top: 18px;">
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;" id="eval-progress-text">Processing trials...</div>
+                    <div style="background: var(--bg-base); height: 8px; border-radius: 4px; overflow: hidden; border: 1px solid var(--border-subtle);">
+                        <div id="eval-progress-bar" style="background: linear-gradient(90deg, var(--accent-cyan), var(--accent-indigo)); width: 0%; height: 100%; transition: width 0.3s ease;"></div>
+                    </div>
+                </div>
+
+                <!-- Results Container -->
+                <div id="eval-results-container" class="panel-card" style="display: none; margin-top: 24px;"></div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Scripts -->
+    <script src="/static/js/recorder.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

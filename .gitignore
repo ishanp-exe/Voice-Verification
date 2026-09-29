@@ -1,0 +1,32 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# Local data, volunteer records & embeddings (Strictly private & local)
+data/
+*.wav
+*.flac
+*.mp3
+*.ogg
+*.pt
+*.npy
+
+# Model caches and pretrained checkpoints
+speechbrain_cache/
+pretrained_models/
+.cache/
+
+# Streamlit local state
+.streamlit/
+
+# OS specific
+.DS_Store
+Thumbs.db
