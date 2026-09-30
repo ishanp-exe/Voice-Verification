@@ -1,10 +1,4 @@
-# Customer Voice Authentication (Educational Prototype)
-
-> [!WARNING]
-> **ACADEMIC & INTERNSHIP PROTOTYPE ONLY**  
-> This project is an educational, proof-of-concept prototype for 1:1 voice verification. **It is NOT a production banking security system and must NOT be used to authenticate real bank customers or make financial-access decisions.**
-
----
+# Customer Voice Authentication 
 
 ## 1. Project Overview & Objectives
 
