@@ -485,6 +485,22 @@ with tab_enroll:
                 st.session_state.enrollment_takes = []
                 st.rerun()
 
+        with st.expander("💡 Microphone Access & Audio Troubleshooting"):
+            st.markdown(
+                """
+                - **Microphone Blocked / Permission Issue**:
+                  - In Google Chrome or Microsoft Edge, look at the address bar URL (`http://127.0.0.1:8501`).
+                  - Click the **Padlock** or **Site Settings** icon.
+                  - Ensure **Microphone** is toggled to **Allow**.
+                  - Refresh the page (`F5`).
+                - **Duration Requirements**:
+                  - Audio recordings must be at least **0.8 seconds** long. Short clicks or pops will fail validation.
+                - **Supported Formats**:
+                  - Uncompressed WAV (recommended), FLAC, MP3, and OGG.
+                  - Signals are standardized to 16,000 Hz mono in memory.
+                """
+            )
+
     with enroll_col_right:
         st.markdown("#### 2. Staged Enrollment Set")
         st.caption(
@@ -631,6 +647,15 @@ with tab_verify:
                 disabled=(candidate_bytes is None or not volunteer_consent),
             )
 
+            with st.expander("💡 Candidate Audio Troubleshooting"):
+                st.markdown(
+                    """
+                    - **Microphone Inactive**: Ensure microphone permission is granted in browser site settings.
+                    - **Sample Length**: Speak for at least **0.8 seconds** for the model to capture characteristic vocal tract features.
+                    - **Geometric Cosine Similarity**: Note that scores measure angle alignment in $[-1.0, 1.0]$. A score of 0.65 is not a "65% probability" of being the same person.
+                    """
+                )
+
         with v_col_right:
             st.markdown("#### 3. Verification Analysis & Verdict")
 
@@ -771,6 +796,48 @@ with tab_governance:
                         st.error(f"Failed to delete {p_id}.")
             st.divider()
 
+        st.markdown("#### 🚫 Consent Withdrawal & Immediate Data Purge")
+        st.markdown(
+            "Under biometric privacy principles (e.g. GDPR Art. 17 / CCPA), any volunteer can withdraw consent at any time. "
+            "Withdrawing consent immediately purges the volunteer's `.pt` embedding vector and `metadata.json` from the local file system."
+        )
+
+        withdraw_col1, withdraw_col2 = st.columns([0.7, 0.3])
+        with withdraw_col1:
+            withdraw_target = st.selectbox(
+                "Select profile to withdraw consent for:",
+                options=[p.demo_id for p in profiles],
+                key="withdraw_target_id",
+            )
+        with withdraw_col2:
+            st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+            if st.button("🚫 Withdraw & Purge", type="primary", use_container_width=True, key="withdraw_consent_btn"):
+                purged = storage.delete_volunteer(withdraw_target)
+                if purged:
+                    st.session_state.global_volunteer_consent = False
+                    st.success(f"Consent withdrawn. Profile `{withdraw_target}` and all associated vector data permanently purged.")
+                    time.sleep(1.0)
+                    st.rerun()
+                else:
+                    st.error(f"Failed to purge profile `{withdraw_target}`.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("#### 🛡️ Local Data Architecture & Privacy Summary")
+    st.markdown(
+        """
+        <div class="stat-card" style="font-size: 0.9rem; line-height: 1.6;">
+            <b>Storage Path:</b> <code>data/volunteers/&lt;demo_id&gt;/</code><br>
+            <b>Stored Artifacts:</b>
+            <ul>
+                <li><code>embedding.pt</code>: 192-dimensional floating point tensor representing voice characteristics.</li>
+                <li><code>metadata.json</code>: Anonymous timestamp, sample count, model source (no PII).</li>
+            </ul>
+            <b>Raw Audio Retention:</b> <b>Zero</b> raw audio recordings are stored on disk. Audio streams are validated and converted in memory, then immediately freed by Python garbage collection.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 
 # =============================================================================
 # TAB 4: LibriSpeech Evaluation Mode
@@ -793,9 +860,12 @@ with tab_eval:
         unsafe_allow_html=True,
     )
 
-    eval_col1, eval_col2 = st.columns([0.65, 0.35], gap="large")
+    eval_col1, eval_col2 = st.columns([0.6, 0.4], gap="large")
 
     default_corpus_path = r"C:\Users\ishan\Downloads\LibriSpeech\test-clean"
+    valid_index_path = Path("data/evaluation/valid_audio_index.csv")
+    has_valid_index = valid_index_path.is_file()
+
     with eval_col1:
         dataset_path_str = st.text_input(
             "External Dataset Directory Path (read in-place without copying):",
@@ -814,21 +884,43 @@ with tab_eval:
             help="Partitions speakers into separate calibration (dev) and evaluation (test) subsets to avoid optimistic post-hoc threshold selection bias.",
         )
 
+        use_validated_index = st.checkbox(
+            "Use Clean Validated Index (valid_audio_index.csv)",
+            value=has_valid_index,
+            disabled=not has_valid_index,
+            help="Directs trial generation to use only audio files that passed acoustic and integrity validation.",
+        )
+
     with eval_col2:
         st.markdown("#### Corpus Validation")
-        adapter = LibriSpeechAdapter(dataset_path_str)
+        adapter = LibriSpeechAdapter(
+            dataset_path_str,
+            valid_index_path=valid_index_path if use_validated_index and has_valid_index else None,
+        )
         summary = adapter.validate()
 
         if summary.is_valid:
+            index_tag = " (Pre-Validated Index Active)" if summary.used_validated_index else ""
             st.success(
-                f"✅ **Corpus Validated**\n\n"
+                f"✅ **Corpus Validated{index_tag}**\n\n"
                 f"- **Speakers Found**: {summary.num_speakers}\n"
-                f"- **Recordings**: {summary.num_recordings}\n"
+                f"- **Recordings**: {summary.num_recordings:,}\n"
                 f"- Sample IDs: `{', '.join(summary.sample_speakers[:4])}...`",
                 icon="📁",
             )
         else:
             st.error(f"❌ {summary.message}")
+
+        if st.button("🔄 Run Dataset Cleaning Script", use_container_width=True, help="Executes scripts/clean_validate_dataset.py in-place to re-validate all audio files."):
+            with st.spinner("Validating and hashing all audio files in corpus..."):
+                try:
+                    from scripts.clean_validate_dataset import validate_dataset
+                    all_recs, val_recs, rejs = validate_dataset(Path(dataset_path_str), Path("data/evaluation"))
+                    st.toast(f"Validated {len(val_recs):,} audio files across {len(set(r.speaker_id for r in val_recs))} speakers.", icon="✅")
+                    time.sleep(1.0)
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"Cleaning script failed: {ex}")
 
     run_benchmark_btn = st.button(
         "🚀 Run Biometric Verification Benchmark",
@@ -919,6 +1011,8 @@ with tab_eval:
             "cache_count": len(embedding_cache),
             "elapsed": elapsed,
             "note": split_note,
+            "used_validated_index": summary.used_validated_index,
+            "dataset_path": dataset_path_str,
         }
         progress_bar.empty()
         status_text.empty()
@@ -978,6 +1072,7 @@ with tab_eval:
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown(
             f"""
+            - **Data Index**: `{'pre-validated valid_audio_index.csv' if res.get('used_validated_index') else 'direct directory scan'}`
             - **Calibration Trials Evaluated**: `{res['cal_trials_count']}` (disjoint dev speakers, seed 42)
             - **Held-Out Test Trials Evaluated**: `{res['test_trials_count']}` (disjoint eval speakers, seed 100)
             - **Skipped / Corrupt Audio**: `{res['cal_skip'] + res['test_skip']}`
@@ -985,3 +1080,70 @@ with tab_eval:
             - **Benchmark Duration**: `{res['elapsed']:.2f}s`
             """
         )
+
+        # Export Data in JSON and CSV
+        import csv
+        import json
+
+        export_dict = {
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "dataset_directory": res.get("dataset_path", dataset_path_str),
+            "used_validated_index": res.get("used_validated_index", False),
+            "calibrated_threshold": float(res["calibrated_threshold"]),
+            "seeds": {"calibration_seed": 42, "evaluation_seed": 100},
+            "trials_summary": {
+                "calibration_trials": res["cal_trials_count"],
+                "test_trials": res["test_trials_count"],
+                "skipped_trials": res["cal_skip"] + res["test_skip"],
+                "unique_recordings_cached": res["cache_count"],
+            },
+            "held_out_metrics": {
+                "far": float(tm.far),
+                "frr": float(tm.frr),
+                "accuracy": float(tm.accuracy),
+                "false_accepts": tm.false_accepts,
+                "false_rejects": tm.false_rejects,
+                "true_accepts": tm.true_accepts,
+                "true_rejects": tm.true_rejects,
+                "imposter_trials": tm.imposter_trials,
+                "genuine_trials": tm.genuine_trials,
+                "total_trials": tm.total_trials,
+            },
+            "disclaimer": "Evaluated on clean 16 kHz audiobook speech (LibriSpeech test-clean). Does not establish performance on telephone banking audio.",
+        }
+        json_payload = json.dumps(export_dict, indent=2)
+
+        csv_buf = io.StringIO()
+        writer = csv.writer(csv_buf)
+        writer.writerow(["Parameter / Metric", "Value", "Notes"])
+        writer.writerow(["Dataset Directory", res.get("dataset_path", dataset_path_str), "External in-situ"])
+        writer.writerow(["Used Validated Index", res.get("used_validated_index", False), "valid_audio_index.csv"])
+        writer.writerow(["Calibrated Threshold (τ)", f"{res['calibrated_threshold']:.4f}", "Dev EER operating point (Seed 42)"])
+        writer.writerow(["Held-Out Test FAR", f"{tm.far:.4f}", f"{tm.false_accepts} / {tm.imposter_trials} Imposters (Seed 100)"])
+        writer.writerow(["Held-Out Test FRR", f"{tm.frr:.4f}", f"{tm.false_rejects} / {tm.genuine_trials} Genuines (Seed 100)"])
+        writer.writerow(["Held-Out Test Accuracy", f"{tm.accuracy:.4f}", f"{(tm.true_accepts + tm.true_rejects)} / {tm.total_trials} Correct"])
+        writer.writerow(["Total Trials Evaluated", res["cal_trials_count"] + res["test_trials_count"], "400 requested across partitions"])
+        writer.writerow(["Unique Audio Cached", res["cache_count"], "In-memory tensor cache"])
+        writer.writerow(["Skipped Trials", res["cal_skip"] + res["test_skip"], "0 rejected / corrupt"])
+        writer.writerow(["Disclaimer", "Clean audiobook speech (LibriSpeech test-clean). Not telephone banking audio.", "Academic scope"])
+        csv_payload = csv_buf.getvalue()
+
+        st.markdown("#### 💾 Export Benchmark Results")
+        exp_col1, exp_col2 = st.columns(2)
+        with exp_col1:
+            st.download_button(
+                "📥 Export Results as JSON",
+                data=json_payload,
+                file_name="librispeech_evaluation_results.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+        with exp_col2:
+            st.download_button(
+                "📥 Export Results as CSV",
+                data=csv_payload,
+                file_name="librispeech_evaluation_results.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+

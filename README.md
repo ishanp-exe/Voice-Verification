@@ -28,6 +28,10 @@ Voice-Verification/
 ├── README.md                    # Project documentation and run guide
 ├── docs/
 │   └── PROJECT_SYNOPSIS.md      # Formal internship project synopsis
+├── scripts/
+│   └── clean_validate_dataset.py # Repeatable LibriSpeech validation & cleaning audit tool
+├── data/
+│   └── evaluation/              # Generated audit logs (audio_file_validation.csv, valid_audio_index.csv)
 ├── src/
 │   ├── __init__.py
 │   ├── audio.py                 # Audio ingestion, validation (format/length), 16 kHz mono conversion
@@ -110,43 +114,52 @@ Alternatively, for PowerShell:
 
 ---
 
-## 5. Usage Guide
+## 5. LibriSpeech Dataset Cleaning & Validation
 
-### Mode 1: Volunteer Demo Mode
-Designed for interactive, privacy-preserving testing with volunteers:
-1. **Informed Consent**: Review the privacy notice and check the consent box to activate controls.
-2. **Multi-Sample Speaker Enrollment**:
-   - Generate an anonymized Demo ID (e.g., `VOL-7281`).
-   - Use the **Browser Microphone** to record 1 or more distinct audio takes (with real-time waveform visualizer), or upload audio files (`.wav`, `.flac`, `.mp3`, `.ogg`) of at least 0.8 second duration each.
-   - Click **➕ Add to Enrollment Set** after each recording to stage multiple takes.
-   - Click **Enroll Voice Profile**. The system extracts an embedding for each recording and combines them via arithmetic mean and unit L2-normalization into one unified template. Raw audio is discarded immediately. *Note: Enrolling does not train or modify the neural network.*
-3. **1:1 Verification**:
-   - Select the enrolled Demo ID from the dropdown.
-   - Record or upload a single candidate audio sample.
-   - Adjust the **Decision Threshold** slider.
-   - Click **Verify Candidate Voice** to view the computed cosine similarity score, threshold pin, decision margin, and match verdict.
-4. **Data Purging**:
-   - Under **Enrolled Profiles & Data Governance**, click **Purge** to permanently remove all stored representations and metadata for a profile from disk.
+Before benchmarking on external corpus audio, validate the dataset integrity without modifying, moving, or renaming any original files:
 
-### Mode 2: LibriSpeech Evaluation Mode
-Designed for benchmarking verification error metrics on external corpus data:
-1. **Corpus Scope Notice**: LibriSpeech contains clean audiobook narrations and does not represent telephone banking audio. A domain-specific dataset can be integrated at a later stage.
-2. **Directory Selection**:
-   - Provide the path to your extracted `LibriSpeech` or `test-clean` folder located **outside** this repository (e.g., `C:\Users\ishan\Downloads\LibriSpeech\test-clean`).
-   - The app reads files in-place and **will not move or copy** the dataset.
-3. **Trial Configuration & In-Memory Caching**:
-   - Specify the desired count of Genuine (same-speaker) and Imposter (different-speaker) trial pairs (defaults to 100 of each per partition).
-   - In-memory embedding caching ensures audio files appearing across multiple trial pairs do not trigger redundant model inferences.
-   - **Calibration & Test Split**: When enabled on a dataset with sufficient speakers ($\ge 6$ speakers with $\ge 4$ multi-sample speakers), the system partitions data into disjoint sets:
-     - **Stage 1 (Calibration)**: The operating threshold $\tau_{cal}$ is determined strictly on the calibration partition where $|FAR - FRR|$ is minimized.
-     - **Stage 2 (Held-Out Test Evaluation)**: Unbiased final performance metrics (Test FAR, Test FRR, Test Accuracy) are measured on the unseen evaluation partition using $\tau_{cal}$.
-     - *Methodological Discipline*: The system explicitly avoids calculating an "EER threshold" on the evaluation set itself, preventing optimistic post-hoc test bias.
-   - **Development Preview**: If the dataset has too few speakers or the split is disabled, the system clearly labels output as a Development Preview across available trials.
-   - **Transparent Reporting**: Reports exact trial breakdown, calibration and evaluation seeds, cache statistics, and any unreadable/skipped files.
+```powershell
+.\.venv\Scripts\python scripts/clean_validate_dataset.py --dataset-dir "C:\Users\ishan\Downloads\LibriSpeech\test-clean" --output-dir "data/evaluation"
+```
+
+This script:
+- Decodes every audio file via `soundfile` to verify readability, channel count, and sample rate.
+- Checks audio duration against the minimum threshold ($\ge 0.8$s).
+- Computes SHA-256 hashes to reliably flag duplicate files.
+- Checks directory vs. filename speaker labeling consistency.
+- Generates 3 audit files outside the dataset directory in `data/evaluation/`:
+  - `audio_file_validation.csv`: Comprehensive log of all audio files with status and rejection reasons.
+  - `valid_audio_index.csv`: Curated index of files that passed all checks.
+  - `dataset_cleaning_summary.txt`: Human-readable summary of files checked, valid/rejected counts, and speaker distributions.
 
 ---
 
-## 6. Privacy & Data Handling Practices
+## 6. Usage Guide
+
+### Mode 1: Volunteer Demo Mode
+1. **Informed Consent Gate**: Check the volunteer consent box. Without consent, recording and enrollment are blocked.
+2. **Multi-Sample Enrollment**:
+   - Record multiple separate takes via microphone or file upload ($\ge 0.8$s each).
+   - Staged samples are combined via arithmetic mean and unit $L_2$-normalization into a single robust template vector. Raw audio is discarded immediately.
+3. **1:1 Verification**:
+   - Select the enrolled Demo ID from the dropdown.
+   - Record or upload a single candidate audio sample.
+   - Adjust the **Decision Threshold** slider (calibrated dev point: $\tau = 0.31$).
+   - Click **Verify Candidate Voice** to view the similarity score, threshold, decision margin, and match/no-match verdict.
+4. **Data Governance & Consent Withdrawal**:
+   - Permanent profile purging and immediate consent withdrawal are available in **Profile Governance**.
+
+### Mode 2: LibriSpeech Evaluation Mode
+1. **Pre-Validated Index Active**: When `data/evaluation/valid_audio_index.csv` is present, the benchmark automatically draws trial pairs exclusively from verified clean files.
+2. **Calibration & Test Split**:
+   - **Calibration Partition (Dev)**: Operating threshold $\tau_{cal}$ is determined where empirical Equal Error Rate is reached.
+   - **Held-Out Evaluation Partition (Test)**: Unbiased performance metrics (FAR, FRR, Accuracy) are measured on unseen evaluation speakers at the fixed $\tau_{cal}$.
+3. **Export Benchmark Results**: Download full evaluation results with seeds, trial breakdowns, and confusion counts as JSON or CSV.
+4. **Transparent Reporting**: Reports exact trial breakdown, calibration and evaluation seeds, cache statistics, and any unreadable/skipped files.
+
+---
+
+## 7. Privacy & Data Handling Practices
 - **Strictly Local Processing**: Audio files and embeddings remain on the local machine. No data is transmitted to cloud services or external APIs.
 - **Tightened Local API Access**: The FastAPI application is bound strictly to `127.0.0.1` and CORS is restricted to local application origins (`http://127.0.0.1:8000`, `http://localhost:8000`).
 - **Minimal Retention**: By default, raw audio is discarded immediately following embedding extraction. Only mathematical embedding vectors and non-PII metadata (`metadata.json`) are stored.
@@ -155,13 +168,13 @@ Designed for benchmarking verification error metrics on external corpus data:
 
 ---
 
-## 7. Understanding Scores & Thresholds
+## 8. Understanding Scores & Thresholds
 - **Cosine Similarity is NOT a Probability**: Cosine similarity measures geometric alignment in $[-1.0, 1.0]$. A score of `0.65` does not represent a "65% chance of being the same person."
 - **Configurable Decision Threshold**: Different security postures require different operating points. High thresholds minimize False Accepts (imposter breach), while low thresholds minimize False Rejects (customer friction). No threshold should be considered "typical" without empirical calibration on target channel audio.
 
 ---
 
-## 8. Limitations & Scope Boundaries
+## 9. Limitations & Scope Boundaries
 - **Prototype Status**: Designed exclusively for internship-level education and research.
 - **No Anti-Spoofing / Presentation Attack Detection (PAD)**: Vulnerable to replays, text-to-speech synthesis, and deepfakes.
 - **No 1:N Identification**: Evaluates one-to-one identity claims only.
@@ -170,7 +183,7 @@ Designed for benchmarking verification error metrics on external corpus data:
 
 ---
 
-## 9. Running Automated Tests
+## 10. Running Automated Tests
 
 To run the automated unit and API test suite from the repository root in PowerShell:
 ```powershell

@@ -42,6 +42,7 @@ class DatasetSummary:
     num_speakers: int
     num_recordings: int
     sample_speakers: List[str]
+    used_validated_index: bool = False
 
 
 class BaseSpeakerDatasetAdapter(abc.ABC):
@@ -71,9 +72,11 @@ class LibriSpeechAdapter(BaseSpeakerDatasetAdapter):
     banking telephone audio (which has 8 kHz band-limiting, codec artifacts, and line noise).
     """
 
-    def __init__(self, root_dir: str | Path):
+    def __init__(self, root_dir: str | Path, valid_index_path: Optional[str | Path] = None):
         self.root_dir = Path(root_dir) if root_dir else None
+        self.valid_index_path = Path(valid_index_path) if valid_index_path else None
         self._speaker_map: Optional[Dict[str, List[Path]]] = None
+        self._used_validated_index: bool = False
 
     def validate(self) -> DatasetSummary:
         """Validates that the directory exists and contains valid LibriSpeech audio."""
@@ -121,18 +124,46 @@ class LibriSpeechAdapter(BaseSpeakerDatasetAdapter):
                 sample_speakers=[],
             )
 
+        msg = "Valid LibriSpeech directory detected."
+        if self._used_validated_index:
+            msg = f"Valid LibriSpeech dataset loaded via pre-validated index ({self.valid_index_path.name})."
+
         return DatasetSummary(
             is_valid=True,
-            message="Valid LibriSpeech directory detected.",
+            message=msg,
             num_speakers=num_speakers,
             num_recordings=num_recordings,
             sample_speakers=sorted(list(speaker_map.keys()))[:5],
+            used_validated_index=self._used_validated_index,
         )
 
     def get_speaker_audio_map(self) -> Dict[str, List[Path]]:
-        """Scans the directory for speaker audio files, caching the result."""
+        """Scans the directory for speaker audio files, caching the result.
+
+        If a valid_index_path is provided, loads the verified audio files from the index.
+        Otherwise, discovers .flac and .wav files from the directory tree.
+        """
         if self._speaker_map is not None:
             return self._speaker_map
+
+        # 1. Attempt loading from validated index CSV if specified
+        if self.valid_index_path and self.valid_index_path.is_file():
+            try:
+                import csv
+                indexed_map: Dict[str, List[Path]] = defaultdict(list)
+                with open(self.valid_index_path, "r", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        p = Path(row["file_path"])
+                        if p.is_file():
+                            spk = row.get("speaker_id", "unknown")
+                            indexed_map[spk].append(p)
+                if indexed_map:
+                    self._speaker_map = dict(indexed_map)
+                    self._used_validated_index = True
+                    return self._speaker_map
+            except Exception as e:
+                logger.warning("Could not read valid_audio_index.csv: %s. Falling back to directory scan.", e)
 
         if not self.root_dir or not self.root_dir.is_dir():
             return {}

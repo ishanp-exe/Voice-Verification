@@ -323,6 +323,28 @@ class TestDatasetEvaluation:
         for t in imposter_trials:
             assert t.speaker_a != t.speaker_b
 
+    def test_adapter_loads_from_valid_index_csv(self, dummy_librispeech_dir):
+        # Create a mock valid_audio_index.csv pointing to files in dummy_librispeech_dir
+        adapter_raw = LibriSpeechAdapter(dummy_librispeech_dir)
+        raw_map = adapter_raw.get_speaker_audio_map()
+
+        import csv
+        index_file = dummy_librispeech_dir / "valid_audio_index.csv"
+        with open(index_file, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["file_path", "speaker_id", "duration_sec", "sample_rate", "num_channels", "sha256"])
+            for spk, paths in raw_map.items():
+                for p in paths:
+                    writer.writerow([str(p.resolve()), spk, "1.50", 16000, 1, "mockhash"])
+
+        adapter_indexed = LibriSpeechAdapter(dummy_librispeech_dir, valid_index_path=index_file)
+        summary = adapter_indexed.validate()
+        assert summary.is_valid is True
+        assert summary.used_validated_index is True
+        assert summary.num_speakers == 2
+        assert summary.num_recordings == 6
+
+
 
 # ---------------------------------------------------------------------------
 # 6. Empirical Metrics Calculation Tests

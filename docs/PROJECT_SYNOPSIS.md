@@ -110,10 +110,11 @@ The system is constructed with a decoupled, modular architecture where both user
 - **Programming Language**: Python 3.10+
 - **Deep Learning Framework**: PyTorch and Torchaudio
 - **Pretrained Biometric Models**: SpeechBrain (`speechbrain/spkrec-ecapa-voxceleb`)
-- **Web Interface & Local Server**: FastAPI with vanilla HTML5, CSS3, and modern JavaScript (no external frontend build systems)
-- **Audio I/O & Signal Processing**: SoundFile, NumPy, SciPy, Web Audio API (in-browser 16 kHz PCM WAV encoding)
-- **Data Analysis & Visualization**: Pandas, Matplotlib
-- **Quality Assurance**: Pytest (utilizing mocked model embeddings for test isolation)
+- **Web Interface**: Streamlit (styled with 21st.dev-inspired cards, hero spotlight, and glassmorphic telemetry readouts)
+- **Audio I/O & Signal Processing**: SoundFile, NumPy, SciPy, native Streamlit audio input (`st.audio_input`)
+- **Dataset Audit & Validation**: Repeatable Python validation script (`scripts/clean_validate_dataset.py`) producing SHA-256 integrity logs and validated index CSVs
+- **Data Analysis & Export**: Pandas, JSON/CSV export utilities
+- **Quality Assurance**: Pytest (automated unit tests, FastAPI test client, and Streamlit AppTest simulation)
 
 ---
 
@@ -123,6 +124,7 @@ The system is constructed with a decoupled, modular architecture where both user
 - **Source**: Public domain LibriVox audiobooks.
 - **Role**: Development dataset for implementing and testing the trial generation and evaluation workflow.
 - **Handling**: Stored externally to the repository; accessed in-place without automated copying.
+- **Data Integrity & Cleaning**: Pre-validated via `scripts/clean_validate_dataset.py` to ensure only decoded, uncorrupted, multi-utterance speakers are fed to the benchmark harness (`valid_audio_index.csv`).
 - **Acoustic Reality Check**: LibriSpeech consists of clean, narrated audiobook recordings captured under quiet conditions. It **does not** represent telephony banking audio (which exhibits 8 kHz band-pass filtering, codec compression, packet loss, and ambient acoustic noise).
 
 ### Future Target Dataset: Enterprise Banking Audio
