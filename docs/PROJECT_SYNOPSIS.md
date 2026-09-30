@@ -28,11 +28,11 @@ However, studying and integrating speaker-embedding pipelines involves significa
 ## 4. Objectives
 The key objectives of this project are:
 1. **Develop an Educational 1:1 Verification Engine**: Build a modular Python application leveraging PyTorch, Torchaudio, and SpeechBrain’s pretrained ECAPA-TDNN model to extract speaker embeddings and perform cosine similarity comparisons.
-2. **Implement an Intuitive, Responsive Web Interface**: Provide a polished, dark-mode single-page application built with FastAPI and plain HTML/CSS/JavaScript (inspired by 21st.dev design principles) that visualizes similarity scores alongside user-adjustable decision thresholds, outputting transparent match/no-match decisions.
-3. **Establish a Safe Volunteer Demonstration Workflow**: Allow consenting volunteers to enroll via live browser audio or uploaded files under randomized demo IDs, test candidate samples, inspect stored metadata, and permanently purge their data from the local machine.
-4. **Build a Standardized Evaluation Harness**: Provide an evaluation adapter for an external LibriSpeech `test-clean` dataset to programmatically construct genuine (same-speaker) and imposter (different-speaker) trial pairs using the identical verification pipeline.
+2. **Implement an Intuitive, Responsive Web Interface**: Provide a polished, dark-mode Streamlit application (styled with 21st.dev design principles including hero spotlight, glassmorphic stat cards, and scroll indicator) that visualizes similarity scores alongside user-adjustable decision thresholds, outputting transparent match/no-match decisions.
+3. **Establish a Safe Volunteer Demonstration Workflow**: Allow consenting volunteers to enroll via single or multi-sample browser audio or uploaded files under randomized demo IDs, test candidate samples, inspect stored metadata, and permanently purge their data from the local machine.
+4. **Build a Standardized Evaluation Harness**: Provide an evaluation adapter for an external LibriSpeech `test-clean` dataset to programmatically construct genuine (same-speaker) and imposter (different-speaker) trial pairs using the identical verification pipeline with in-memory embedding caching.
 5. **Empirical Performance Measurement**: Calculate and graph empirical verification metrics (FAR, FRR, accuracy, and empirical EER) strictly from actual trial runs without inventing or fabricating results.
-6. **Decoupled Architecture for Future HCL Dataset**: Isolate dataset ingestion from verification logic to allow straightforward integration of the official HCL project dataset once its schema, licensing, and handling guidelines are provided.
+6. **Modular Architecture for Future Domain Datasets**: Isolate dataset ingestion from verification logic to allow straightforward integration of specialized enterprise datasets once schema, licensing, and handling guidelines are provided.
 
 ---
 
@@ -41,13 +41,13 @@ The system is constructed with a decoupled, modular architecture where both user
 
 ```text
 +---------------------------------------------------------------------------------+
-|                         FastAPI Modern Web Application                          |
+|                         Streamlit Modern Web Application                        |
 |   +------------------------------------+------------------------------------+   |
 |   |        Volunteer Demo Mode         |     LibriSpeech Evaluation Mode    |   |
 |   | - Informed consent verification    | - External path selection (in-situ)|   |
-|   | - Live mic (WAV) / file upload     | - Speaker trial generation         |   |
+|   | - Multi-take mic (WAV) / upload    | - Speaker trial generation         |   |
 |   | - Candidate verification           | - Separate calibration/eval split  |   |
-|   | - Complete profile & data deletion | - Empirical FAR/FRR metric sweep   |   |
+|   | - Complete profile & data deletion | - In-memory embedding cache        |   |
 |   +------------------------------------+------------------------------------+   |
 +----------------------------------------+----------------------------------------+
                                          |
@@ -55,10 +55,12 @@ The system is constructed with a decoupled, modular architecture where both user
 +---------------------------------------------------------------------------------+
 |                            Unified Verification Core                            |
 |   1. Audio Ingestion & Resampling (src/audio.py):                               |
-|      - Mono conversion, validation (min 1.0s), resample to 16 kHz               |
+|      - Mono conversion, validation (min 0.8s), resample to 16 kHz               |
 |   2. Pretrained ECAPA-TDNN Embedding Extraction (src/model.py):                 |
 |      - Frozen weights, 192-dim normalized vector; NO model fine-tuning         |
-|   3. Vector Geometry & Threshold Comparator (src/verification.py):              |
+|   3. Multi-Take Embedding Combination (src/verification.py):                    |
+|      - Element-wise arithmetic mean across takes with unit L2 normalization     |
+|   4. Vector Geometry & Threshold Comparator (src/verification.py):              |
 |      - Cosine similarity: cos(u, v) = (u . v) / (||u|| * ||v||)                 |
 |      - Decision: Score >= Threshold -> MATCH; else NO MATCH                     |
 +---------------------------------------------------------------------------------+
@@ -108,26 +110,26 @@ The system is constructed with a decoupled, modular architecture where both user
 - **Programming Language**: Python 3.10+
 - **Deep Learning Framework**: PyTorch and Torchaudio
 - **Pretrained Biometric Models**: SpeechBrain (`speechbrain/spkrec-ecapa-voxceleb`)
-- **Web Interface**: Streamlit
-- **Audio I/O & Signal Processing**: SoundFile, NumPy, SciPy
+- **Web Interface & Local Server**: FastAPI with vanilla HTML5, CSS3, and modern JavaScript (no external frontend build systems)
+- **Audio I/O & Signal Processing**: SoundFile, NumPy, SciPy, Web Audio API (in-browser 16 kHz PCM WAV encoding)
 - **Data Analysis & Visualization**: Pandas, Matplotlib
 - **Quality Assurance**: Pytest (utilizing mocked model embeddings for test isolation)
 
 ---
 
-## 8. Dataset Strategy & HCL Dataset Roadmap
+## 8. Dataset Strategy & Enterprise Dataset Roadmap
 
-### Current Temporary Development Dataset: LibriSpeech test-clean
+### Current Development Dataset: LibriSpeech test-clean
 - **Source**: Public domain LibriVox audiobooks.
-- **Role**: Temporary development dataset for implementing and testing the trial generation and evaluation workflow.
+- **Role**: Development dataset for implementing and testing the trial generation and evaluation workflow.
 - **Handling**: Stored externally to the repository; accessed in-place without automated copying.
 - **Acoustic Reality Check**: LibriSpeech consists of clean, narrated audiobook recordings captured under quiet conditions. It **does not** represent telephony banking audio (which exhibits 8 kHz band-pass filtering, codec compression, packet loss, and ambient acoustic noise).
 
-### Future Official Dataset: HCL Dataset
-- The official project dataset will be provided by HCL at a later date.
-- **Strict Boundary**: This prototype makes zero assumptions regarding the HCL dataset’s directory structure, audio encoding, speaker labeling, licensing, or handling protocols.
-- The dataset loading logic is isolated behind an abstract adapter interface (`BaseSpeakerDatasetAdapter`), ensuring an `HCLDatasetAdapter` can be cleanly integrated once formal documentation and access terms are released.
-- No HCL data will be processed until its specifications and governance requirements are established.
+### Future Target Dataset: Enterprise Banking Audio
+- Specialized domain datasets can be integrated in subsequent phases.
+- **Strict Boundary**: This prototype makes zero assumptions regarding target domain datasets' directory structure, audio encoding, speaker labeling, licensing, or handling protocols.
+- The dataset loading logic is isolated behind an abstract adapter interface (`BaseSpeakerDatasetAdapter`), ensuring custom adapters can be cleanly integrated once formal documentation and access terms are released.
+- No external enterprise data will be processed until its specifications and governance requirements are established.
 
 ---
 
@@ -154,10 +156,10 @@ Subsequent project phases may investigate:
 - **Presentation Attack Detection (PAD)**: Integrating anti-spoofing models (e.g. ASVspoof challenge baselines) to reject synthetic or replayed audio.
 - **Liveness Challenge-Response**: Incorporating dynamic spoken passcodes or prompt-response mechanisms to verify speaker presence.
 - **Acoustic Channel Adaptation**: Simulating telephony band-pass filters and testing noise-robust front-ends.
-- **HCL Dataset Integration**: Developing a specialized `HCLDatasetAdapter` when official data and guidelines are provided.
+- **Domain Dataset Integration**: Developing specialized adapters when target enterprise data and guidelines are provided.
 - **Score Calibration**: Fitting Probabilistic Linear Discriminant Analysis (PLDA) models to output log-likelihood ratios.
 
 ---
 
 ## 12. Conclusion
-The Customer Voice Authentication prototype offers a structured, transparent exploration of biometric speaker verification. By leveraging SpeechBrain's ECAPA-TDNN model within an accessible Streamlit environment, the project highlights key operational concepts—including embedding representation, metric comparison, decision boundaries, and error trade-offs. By prioritizing volunteer consent, local data residency, and clear architectural boundaries, the project provides a solid, responsible foundation for academic study and future dataset integration.
+The Customer Voice Authentication prototype offers a structured, transparent exploration of biometric speaker verification. By leveraging SpeechBrain's ECAPA-TDNN model within an accessible FastAPI and modern vanilla web application, the project highlights key operational concepts—including embedding representation, metric comparison, decision boundaries, and error trade-offs. By prioritizing volunteer consent, local data residency, and clear architectural boundaries, the project provides a solid, responsible foundation for academic study and future dataset integration.

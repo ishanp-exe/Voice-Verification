@@ -6,7 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
         modelOnline: false,
         enrollRecorder: new WavRecorder(),
         verifyRecorder: new WavRecorder(),
-        enrollBlob: null,
+        enrollBlobs: [], // Array of { id, name, durationSec, blob }
+        currentRecordedEnrollBlob: null,
         verifyBlob: null,
         enrollMode: 'mic', // 'mic' | 'upload'
         verifyMode: 'mic',
@@ -33,11 +34,15 @@ document.addEventListener('DOMContentLoaded', () => {
         enrollCanvas: document.getElementById('enroll-canvas'),
         enrollAudioPreview: document.getElementById('enroll-audio-preview'),
         enrollRecActions: document.getElementById('enroll-rec-actions'),
+        enrollAddSampleBtn: document.getElementById('enroll-add-sample-btn'),
         enrollRetryBtn: document.getElementById('enroll-retry-btn'),
         enrollClearBtn: document.getElementById('enroll-clear-btn'),
         enrollFileInput: document.getElementById('enroll-file-input'),
         enrollDropzone: document.getElementById('enroll-dropzone'),
-        enrollSelectedPill: document.getElementById('enroll-selected-pill'),
+        enrollStagedContainer: document.getElementById('enroll-staged-container'),
+        enrollSamplesCountBadge: document.getElementById('enroll-samples-count-badge'),
+        enrollSamplesList: document.getElementById('enroll-samples-list'),
+        enrollNoSamplesMsg: document.getElementById('enroll-no-samples-msg'),
         enrollSubmitBtn: document.getElementById('enroll-submit-btn'),
         enrollResultCard: document.getElementById('enroll-result-card'),
         // Verify
@@ -205,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tr.innerHTML = `
                     <td><strong style="color: var(--accent-cyan); font-family: monospace;">${v.demo_id}</strong></td>
                     <td style="color: var(--text-secondary);">${cleanDate} UTC</td>
-                    <td>${v.audio_duration_sec.toFixed(2)} s</td>
+                    <td>${v.audio_duration_sec.toFixed(1)} s (${v.num_enrollment_samples || 1} take${(v.num_enrollment_samples || 1) > 1 ? 's' : ''})</td>
                     <td><span class="badge-pill" style="font-size: 10px;">192-dim vector</span></td>
                     <td>
                         <button class="btn btn-danger btn-sm" data-id="${v.demo_id}" style="padding: 4px 10px; font-size: 11px;">
@@ -241,7 +246,56 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 3. Consent Gate
+    // Helper: Render Staged Enrollment Samples
+    function renderStagedSamples() {
+        if (!elements.enrollSamplesList) return;
+        const total = state.enrollBlobs.length;
+        if (elements.enrollSamplesCountBadge) {
+            elements.enrollSamplesCountBadge.textContent = `${total} ready`;
+        }
+
+        elements.enrollSamplesList.innerHTML = '';
+        if (total === 0) {
+            if (elements.enrollNoSamplesMsg) {
+                elements.enrollNoSamplesMsg.style.display = 'block';
+                elements.enrollSamplesList.appendChild(elements.enrollNoSamplesMsg);
+            }
+        } else {
+            if (elements.enrollNoSamplesMsg) elements.enrollNoSamplesMsg.style.display = 'none';
+            state.enrollBlobs.forEach((item, idx) => {
+                const row = document.createElement('div');
+                row.className = 'staged-sample-row';
+                row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: rgba(30, 41, 59, 0.6); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-size: 12px;';
+
+                const labelWrap = document.createElement('div');
+                labelWrap.style.cssText = 'display: flex; align-items: center; gap: 8px; overflow: hidden;';
+                const durText = item.durationSec > 0 ? ` (${item.durationSec.toFixed(1)}s)` : '';
+                labelWrap.innerHTML = `<span style="color: var(--accent-cyan);">🎵</span> <span style="color: var(--text-primary); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${item.name}${durText}</span>`;
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.innerHTML = '✖';
+                removeBtn.title = 'Remove sample';
+                removeBtn.style.cssText = 'background: transparent; border: none; color: #FB7185; cursor: pointer; font-size: 13px; padding: 2px 6px; border-radius: 4px;';
+                removeBtn.addEventListener('click', () => {
+                    state.enrollBlobs.splice(idx, 1);
+                    renderStagedSamples();
+                });
+
+                row.appendChild(labelWrap);
+                row.appendChild(removeBtn);
+                elements.enrollSamplesList.appendChild(row);
+            });
+        }
+        updateEnrollSubmitState();
+    }
+
+    function updateEnrollSubmitState() {
+        const hasSamples = state.enrollBlobs.length > 0 || state.currentRecordedEnrollBlob !== null;
+        elements.enrollSubmitBtn.disabled = !state.consentGiven || !hasSamples;
+    }
+
+    // Consent Checkbox listener update
     elements.consentCheckbox.addEventListener('change', (e) => {
         state.consentGiven = e.target.checked;
         elements.volunteerFlowCards.forEach(card => {
@@ -251,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.classList.add('locked');
             }
         });
-        elements.enrollSubmitBtn.disabled = !state.consentGiven;
+        updateEnrollSubmitState();
         elements.verifySubmitBtn.disabled = !state.consentGiven || state.volunteers.length === 0;
     });
 
@@ -313,28 +367,56 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.enrollRecBtn.className = 'rec-btn start-rec';
             elements.enrollRecBtn.innerHTML = '🎙️';
             if (res) {
-                state.enrollBlob = res.blob;
+                state.currentRecordedEnrollBlob = { blob: res.blob, durationSec: res.durationSec };
                 elements.enrollAudioPreview.src = URL.createObjectURL(res.blob);
                 elements.enrollAudioPreview.style.display = 'block';
                 if (elements.enrollRecActions) elements.enrollRecActions.style.display = 'flex';
+                updateEnrollSubmitState();
+
                 if (res.durationSec < 1.0) {
-                    showToast(`Recording is ${res.durationSec.toFixed(1)}s. Please record at least 1.0s.`, 'error');
+                    showToast(`Recording is ${res.durationSec.toFixed(1)}s. Minimum 1.0s recommended.`, 'error');
                 } else {
-                    showToast(`Captured ${res.durationSec.toFixed(1)}s audio sample.`);
+                    showToast(`Captured ${res.durationSec.toFixed(1)}s sample. Click '+ Add to Enrollment Set' to include it.`);
                 }
             }
         }
     });
 
-    // Retry and Clear handlers (Enroll)
-    if (elements.enrollRetryBtn) {
-        elements.enrollRetryBtn.addEventListener('click', async () => {
-            state.enrollBlob = null;
+    // Add to Enrollment Set handler
+    if (elements.enrollAddSampleBtn) {
+        elements.enrollAddSampleBtn.addEventListener('click', () => {
+            if (!state.currentRecordedEnrollBlob) {
+                showToast('No active recording to add. Record audio first.', 'error');
+                return;
+            }
+            const sampleNum = state.enrollBlobs.length + 1;
+            state.enrollBlobs.push({
+                id: Date.now().toString(),
+                name: `Voice Take #${sampleNum}`,
+                durationSec: state.currentRecordedEnrollBlob.durationSec,
+                blob: state.currentRecordedEnrollBlob.blob,
+            });
+            state.currentRecordedEnrollBlob = null;
             elements.enrollAudioPreview.src = '';
             elements.enrollAudioPreview.style.display = 'none';
             if (elements.enrollRecActions) elements.enrollRecActions.style.display = 'none';
             elements.enrollRecTimer.textContent = '00:00';
             elements.enrollRecTimer.style.color = 'var(--text-muted)';
+            renderStagedSamples();
+            showToast(`Voice Take #${sampleNum} added to enrollment set.`);
+        });
+    }
+
+    // Retry and Clear handlers (Enroll)
+    if (elements.enrollRetryBtn) {
+        elements.enrollRetryBtn.addEventListener('click', async () => {
+            state.currentRecordedEnrollBlob = null;
+            elements.enrollAudioPreview.src = '';
+            elements.enrollAudioPreview.style.display = 'none';
+            if (elements.enrollRecActions) elements.enrollRecActions.style.display = 'none';
+            elements.enrollRecTimer.textContent = '00:00';
+            elements.enrollRecTimer.style.color = 'var(--text-muted)';
+            updateEnrollSubmitState();
             // Trigger new recording
             elements.enrollRecBtn.click();
         });
@@ -342,24 +424,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (elements.enrollClearBtn) {
         elements.enrollClearBtn.addEventListener('click', () => {
-            state.enrollBlob = null;
+            state.currentRecordedEnrollBlob = null;
             elements.enrollAudioPreview.src = '';
             elements.enrollAudioPreview.style.display = 'none';
             if (elements.enrollRecActions) elements.enrollRecActions.style.display = 'none';
             elements.enrollRecTimer.textContent = '00:00';
             elements.enrollRecTimer.style.color = 'var(--text-muted)';
-            showToast('Enrollment recording cleared.');
+            updateEnrollSubmitState();
+            showToast('Active recording cleared.');
         });
     }
 
     // File dropzone (Enroll)
     elements.enrollDropzone.addEventListener('click', () => elements.enrollFileInput.click());
     elements.enrollFileInput.addEventListener('change', (e) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            state.enrollBlob = file;
-            elements.enrollSelectedPill.style.display = 'inline-flex';
-            elements.enrollSelectedPill.textContent = `📁 ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+        if (e.target.files && e.target.files.length > 0) {
+            Array.from(e.target.files).forEach((file, idx) => {
+                state.enrollBlobs.push({
+                    id: `${Date.now()}_${idx}`,
+                    name: file.name,
+                    durationSec: 0,
+                    blob: file,
+                });
+            });
+            elements.enrollFileInput.value = '';
+            renderStagedSamples();
+            showToast(`Added ${e.target.files.length} file(s) to enrollment set.`);
         }
     });
 
@@ -374,18 +464,33 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast("Please enter or generate a Demo Speaker ID.", 'error');
             return;
         }
-        if (!state.enrollBlob) {
-            showToast("Please record or select an audio sample first.", 'error');
+
+        // Auto-stage active recording if user forgot to click "+ Add"
+        if (state.enrollBlobs.length === 0 && state.currentRecordedEnrollBlob) {
+            state.enrollBlobs.push({
+                id: Date.now().toString(),
+                name: 'Voice Take #1',
+                durationSec: state.currentRecordedEnrollBlob.durationSec,
+                blob: state.currentRecordedEnrollBlob.blob,
+            });
+            state.currentRecordedEnrollBlob = null;
+            renderStagedSamples();
+        }
+
+        if (state.enrollBlobs.length === 0) {
+            showToast("Please record or select at least one audio sample.", 'error');
             return;
         }
 
         const formData = new FormData();
         formData.append('demo_id', demoId);
         formData.append('consent', 'true');
-        formData.append('file', state.enrollBlob, 'enrollment.wav');
+        state.enrollBlobs.forEach((item, idx) => {
+            formData.append('files', item.blob, item.name || `sample_${idx + 1}.wav`);
+        });
 
         elements.enrollSubmitBtn.disabled = true;
-        elements.enrollSubmitBtn.textContent = "Extracting Embedding (ECAPA-TDNN)...";
+        elements.enrollSubmitBtn.textContent = `Extracting & Averaging (${state.enrollBlobs.length} samples)...`;
 
         try {
             const res = await fetch('/api/volunteers/enroll', {
@@ -394,20 +499,24 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await res.json();
             if (res.ok && data.success) {
-                showToast(`Speaker '${demoId}' successfully enrolled!`);
+                showToast(`Speaker '${demoId}' enrolled with ${data.num_samples} sample(s)!`);
                 elements.enrollResultCard.style.display = 'block';
                 elements.enrollResultCard.innerHTML = `
-                    <div style="font-size: 13px; color: #34D399; font-weight: 700; margin-bottom: 4px;">✅ Profile Registered</div>
+                    <div style="font-size: 13px; color: #34D399; font-weight: 700; margin-bottom: 4px;">✅ Voice Profile Registered (${data.num_samples} Take${data.num_samples > 1 ? 's' : ''})</div>
                     <div style="font-size: 12px; color: var(--text-secondary);">
-                        Extracted 192-dim vector for <strong>${data.demo_id}</strong> (${data.duration_sec.toFixed(1)}s sample resampled to 16 kHz).
-                        Raw audio discarded. No model weights altered.
+                        Extracted and combined embeddings from <strong>${data.num_samples} separate recording(s)</strong> for <strong>${data.demo_id}</strong> (${data.duration_sec.toFixed(1)}s total audio).
+                        Combined into one unit-normalized 192-dim vector. Raw audio discarded.
                     </div>
                 `;
-                // Refresh list and generate new ID
+                // Reset state and generate new ID
                 elements.demoIdInput.value = generateDemoId();
-                state.enrollBlob = null;
+                state.enrollBlobs = [];
+                state.currentRecordedEnrollBlob = null;
+                elements.enrollAudioPreview.src = '';
                 elements.enrollAudioPreview.style.display = 'none';
-                elements.enrollSelectedPill.style.display = 'none';
+                if (elements.enrollRecActions) elements.enrollRecActions.style.display = 'none';
+                elements.enrollRecTimer.textContent = '00:00';
+                renderStagedSamples();
                 await fetchVolunteers();
             } else {
                 showToast(`Enrollment failed: ${data.detail || data.error}`, 'error');
@@ -734,9 +843,35 @@ document.addEventListener('DOMContentLoaded', () => {
                     </ul>
                 </div>
             `;
-        } else {
-            skippedHtml = `<p style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">All ${data.total_trials} attempted trials were successfully evaluated.</p>`;
+        // Trial breakdown & metadata display
+        let metaDetailsHtml = '';
+        if (data.trial_breakdown) {
+            const calGen = data.trial_breakdown.calibration_evaluated?.genuine ?? 'N/A';
+            const calImp = data.trial_breakdown.calibration_evaluated?.imposter ?? 'N/A';
+            const testGen = data.trial_breakdown.test_evaluated?.genuine ?? data.trial_breakdown.evaluated?.genuine ?? 'N/A';
+            const testImp = data.trial_breakdown.test_evaluated?.imposter ?? data.trial_breakdown.evaluated?.imposter ?? 'N/A';
+            const calSeed = data.seeds?.calibration_seed ?? data.seeds?.seed ?? 'N/A';
+            const testSeed = data.seeds?.evaluation_seed ?? 'N/A';
+            const cachedCount = data.cache_stats?.unique_recordings_cached ?? 'N/A';
+
+            metaDetailsHtml = `
+                <div style="margin-top: 16px; padding: 12px 14px; background: rgba(30, 41, 59, 0.4); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Trial Distribution & Reproducibility Parameters:</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <div>• Calibration Partition: <strong>${calGen}</strong> genuine, <strong>${calImp}</strong> imposter (seed ${calSeed})</div>
+                        <div>• Held-Out Evaluation: <strong>${testGen}</strong> genuine, <strong>${testImp}</strong> imposter (seed ${testSeed})</div>
+                        <div>• Inference Optimization: <strong>${cachedCount}</strong> unique recordings cached</div>
+                        <div>• Evaluation Total: <strong>${data.total_trials}</strong> completed trial pairs</div>
+                    </div>
+                </div>
+            `;
         }
+
+        const disclaimerHtml = `
+            <div style="margin-top: 14px; font-size: 11px; color: var(--text-muted); font-style: italic; border-top: 1px solid var(--border-subtle); padding-top: 10px;">
+                ⚠️ <strong>Acoustic Domain Boundary:</strong> ${data.disclaimer || 'Evaluated on clean audiobook speech (LibriSpeech test-clean). Does not establish performance on telephone banking audio.'}
+            </div>
+        `;
 
         cont.innerHTML = `
             ${badgeHeader}
@@ -766,7 +901,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
             </div>
+            ${metaDetailsHtml}
             ${skippedHtml}
+            ${disclaimerHtml}
         `;
     }
 

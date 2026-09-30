@@ -4,11 +4,11 @@ Provides dataset adapters for external evaluation datasets (such as LibriSpeech 
 Generates genuine (same-speaker) and imposter (different-speaker) trial pairs for
 biometric verification benchmarking.
 
-HCL Dataset Note:
-The official project dataset will be provided by HCL later. To ensure modularity,
-all dataset interactions follow the BaseSpeakerDatasetAdapter interface. An HCL-specific
+Domain Dataset Note:
+A domain-specific evaluation dataset can be integrated in future phases. To ensure modularity,
+all dataset interactions follow the BaseSpeakerDatasetAdapter interface. A specialized
 adapter can be added once its format, labels, licensing, and handling requirements
-are provided. No assumptions about the HCL dataset are made in this module.
+are provided. No assumptions about target domain datasets are made in this module.
 """
 
 from __future__ import annotations

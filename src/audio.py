@@ -59,7 +59,7 @@ def load_and_validate_audio(
             raise AudioValidationError("Audio file is completely empty (0 bytes).")
         stream = io.BytesIO(audio_source)
     elif hasattr(audio_source, "read"):
-        # File-like object (e.g. Streamlit UploadedFile)
+        # File-like object (e.g. FastAPI UploadFile or BytesIO)
         data = audio_source.read()
         if len(data) == 0:
             raise AudioValidationError("Audio file is completely empty (0 bytes).")

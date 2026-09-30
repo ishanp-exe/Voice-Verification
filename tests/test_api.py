@@ -113,6 +113,44 @@ class TestVolunteerWorkflows:
         vols = list_res.json()["volunteers"]
         assert len(vols) == 1
         assert vols[0]["demo_id"] == "VOL-1234"
+        assert vols[0]["num_enrollment_samples"] == 1
+
+    def test_enrollment_multi_sample_success(self, client, mock_model):
+        wav_bytes1 = create_test_wav_bytes(1.2)
+        wav_bytes2 = create_test_wav_bytes(1.5)
+        response = client.post(
+            "/api/volunteers/enroll",
+            data={"demo_id": "VOL-MULTI", "consent": "true"},
+            files=[
+                ("files", ("take1.wav", wav_bytes1, "audio/wav")),
+                ("files", ("take2.wav", wav_bytes2, "audio/wav")),
+            ],
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["demo_id"] == "VOL-MULTI"
+        assert data["num_samples"] == 2
+        assert data["duration_sec"] >= 2.5
+
+        list_res = client.get("/api/volunteers")
+        vols = list_res.json()["volunteers"]
+        multi_vol = next(v for v in vols if v["demo_id"] == "VOL-MULTI")
+        assert multi_vol["num_enrollment_samples"] == 2
+
+    def test_enrollment_multi_sample_invalid_file_rejected(self, client):
+        wav_bytes1 = create_test_wav_bytes(1.2)
+        wav_bytes2 = create_test_wav_bytes(0.3)  # Too short (< 0.8s)
+        response = client.post(
+            "/api/volunteers/enroll",
+            data={"demo_id": "VOL-FAIL", "consent": "true"},
+            files=[
+                ("files", ("take1.wav", wav_bytes1, "audio/wav")),
+                ("files", ("take2.wav", wav_bytes2, "audio/wav")),
+            ],
+        )
+        assert response.status_code == 422
+        assert "#2" in response.json()["detail"]
 
     def test_verification_requires_profile(self, client):
         wav_bytes = create_test_wav_bytes(1.5)
@@ -231,5 +269,11 @@ class TestEvaluationEndpoints:
             assert "test_far" in run_data
             assert "test_frr" in run_data
             assert "test_accuracy" in run_data
+            assert "trial_breakdown" in run_data
+            assert "cache_stats" in run_data
+            assert run_data["calibration_seed"] == 42
+            assert run_data["evaluation_seed"] == 100
+            assert "disclaimer" in run_data
+            assert "audiobook" in run_data["disclaimer"].lower()
         finally:
             shutil.rmtree(temp_corpus, ignore_errors=True)

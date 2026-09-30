@@ -36,6 +36,17 @@ class VolunteerMetadata:
     original_sample_rate: int
     has_raw_audio: bool
     model_name: str
+    num_enrollment_samples: int = 1
+
+    def __getitem__(self, key: str):
+        if key == "created_at":
+            return self.enrolled_at_utc
+        return getattr(self, key)
+
+    def get(self, key: str, default=None):
+        if key == "created_at":
+            return self.enrolled_at_utc
+        return getattr(self, key, default)
 
 
 class VolunteerStorage:
@@ -73,6 +84,8 @@ class VolunteerStorage:
                     try:
                         with open(meta_path, "r", encoding="utf-8") as f:
                             data = json.load(f)
+                        if "num_enrollment_samples" not in data:
+                            data["num_enrollment_samples"] = 1
                         volunteers.append(VolunteerMetadata(**data))
                     except Exception as e:
                         logger.warning("Failed to load metadata for %s: %e", folder.name, e)
@@ -85,6 +98,7 @@ class VolunteerStorage:
         duration_sec: float,
         original_sample_rate: int,
         model_name: str,
+        num_enrollment_samples: int = 1,
         raw_audio_bytes: Optional[bytes] = None,
         save_raw_audio: bool = False,
     ) -> VolunteerMetadata:
@@ -93,9 +107,10 @@ class VolunteerStorage:
         Args:
             demo_id: Anonymized volunteer ID.
             embedding: 1D normalized speaker embedding tensor.
-            duration_sec: Duration of the enrollment audio.
+            duration_sec: Combined duration of the enrollment audio.
             original_sample_rate: Sample rate of original recording.
             model_name: Model used to extract embedding.
+            num_enrollment_samples: Number of distinct recordings averaged.
             raw_audio_bytes: Optional audio bytes if explicitly retained.
             save_raw_audio: If True, saves raw audio sample; defaults to False for privacy.
 
@@ -123,6 +138,7 @@ class VolunteerStorage:
             original_sample_rate=original_sample_rate,
             has_raw_audio=has_raw,
             model_name=model_name,
+            num_enrollment_samples=max(1, num_enrollment_samples),
         )
 
         meta_path = vol_dir / "metadata.json"
@@ -147,6 +163,8 @@ class VolunteerStorage:
             return None
         with open(meta_path, "r", encoding="utf-8") as f:
             data = json.load(f)
+        if "num_enrollment_samples" not in data:
+            data["num_enrollment_samples"] = 1
         return VolunteerMetadata(**data)
 
     def delete_volunteer(self, demo_id: str) -> bool:

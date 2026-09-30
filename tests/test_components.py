@@ -32,7 +32,11 @@ from src.metrics import (
 )
 from src.model import ModelLoadError, SpeakerEmbeddingModel
 from src.storage import VolunteerMetadata, VolunteerStorage
-from src.verification import compute_cosine_similarity, verify_speakers
+from src.verification import (
+    combine_enrollment_embeddings,
+    compute_cosine_similarity,
+    verify_speakers,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +124,43 @@ class TestVerification:
         assert res_no_match.is_match is False
         assert "Cosine similarity score" in res_no_match.explanation
 
+    def test_combine_enrollment_embeddings_averaging_and_normalization(self):
+        # Two orthogonal unit vectors: [1, 0] and [0, 1]
+        v1 = torch.tensor([1.0, 0.0])
+        v2 = torch.tensor([0.0, 1.0])
+
+        combined = combine_enrollment_embeddings([v1, v2])
+
+        # Mean is [0.5, 0.5]; normalized is [1/sqrt(2), 1/sqrt(2)]
+        expected = torch.tensor([1.0 / np.sqrt(2), 1.0 / np.sqrt(2)], dtype=torch.float32)
+        assert torch.allclose(combined, expected, atol=1e-5)
+        assert pytest.approx(float(torch.norm(combined, p=2)), 1e-5) == 1.0
+
+    def test_combine_enrollment_embeddings_with_numpy_inputs(self):
+        v1 = np.array([0.6, 0.8], dtype=np.float32)
+        v2 = np.array([0.8, 0.6], dtype=np.float32)
+
+        combined = combine_enrollment_embeddings([v1, v2])
+        assert isinstance(combined, torch.Tensor)
+        assert pytest.approx(float(torch.norm(combined, p=2)), 1e-5) == 1.0
+
+    def test_combine_enrollment_embeddings_single_vector(self):
+        v = torch.tensor([3.0, 4.0])
+        combined = combine_enrollment_embeddings([v])
+        expected = torch.tensor([0.6, 0.8])
+        assert torch.allclose(combined, expected, atol=1e-5)
+
+    def test_combine_enrollment_embeddings_empty_raises_value_error(self):
+        with pytest.raises(ValueError, match="At least one audio embedding"):
+            combine_enrollment_embeddings([])
+
+    def test_combine_enrollment_embeddings_dimension_mismatch_raises(self):
+        v1 = torch.randn(192)
+        v2 = torch.randn(128)
+        with pytest.raises(ValueError, match="dimension mismatch"):
+            combine_enrollment_embeddings([v1, v2])
+
+
 
 # ---------------------------------------------------------------------------
 # 3. Volunteer Storage & Privacy Tests
@@ -178,6 +219,32 @@ class TestVolunteerStorage:
             temp_storage.delete_volunteer("   ")
         with pytest.raises(ValueError, match="Invalid demo ID"):
             temp_storage._get_volunteer_dir("////")
+
+    def test_save_multi_sample_enrollment_metadata(self, temp_storage):
+        demo_id = "VOL-MULTI-1"
+        emb = torch.randn(192)
+        emb = emb / torch.norm(emb)
+
+        meta = temp_storage.save_volunteer(
+            demo_id=demo_id,
+            embedding=emb,
+            duration_sec=7.2,
+            original_sample_rate=16000,
+            model_name="mock_ecapa",
+            num_enrollment_samples=3,
+        )
+
+        assert meta.num_enrollment_samples == 3
+        assert meta.audio_duration_sec == 7.2
+
+        # Verify load_metadata and list_volunteers preserve sample count
+        loaded_meta = temp_storage.load_metadata(demo_id)
+        assert loaded_meta is not None
+        assert loaded_meta.num_enrollment_samples == 3
+
+        vols = temp_storage.list_volunteers()
+        assert vols[0].num_enrollment_samples == 3
+
 
 
 # ---------------------------------------------------------------------------

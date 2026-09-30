@@ -28,7 +28,11 @@ from src.metrics import (
 )
 from src.model import ModelLoadError, SpeakerEmbeddingModel
 from src.storage import VolunteerStorage
-from src.verification import compute_cosine_similarity, verify_speakers
+from src.verification import (
+    combine_enrollment_embeddings,
+    compute_cosine_similarity,
+    verify_speakers,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +43,15 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# Tightened CORS: strictly restricted to local web application origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -131,11 +139,14 @@ async def list_volunteers() -> Dict[str, Any]:
 async def enroll_volunteer(
     demo_id: str = Form(...),
     consent: str = Form(...),
-    file: UploadFile = File(...),
+    files: Optional[List[UploadFile]] = File(None),
+    file: Optional[UploadFile] = File(None),
 ) -> Dict[str, Any]:
     """Enrolls a consenting volunteer by storing an extracted ECAPA-TDNN embedding vector.
 
-    Strict privacy safeguard:
+    Supports single or multiple separate recordings. When multiple recordings are provided,
+    their embeddings are averaged and L2-normalized into a single robust enrollment vector.
+    Strict privacy safeguards:
     - Raw audio is discarded by default after embedding extraction.
     - No model parameters are updated or fine-tuned.
     """
@@ -152,29 +163,59 @@ async def enroll_volunteer(
             detail="Demo Speaker ID must not be empty.",
         )
 
+    # Collect all uploaded files (handles both single 'file' and multi 'files')
+    all_files: List[UploadFile] = []
+    if files:
+        all_files.extend(files)
+    if file:
+        all_files.append(file)
+
+    if not all_files:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one audio recording file is required for enrollment.",
+        )
+
     model = get_model()
+    extracted_embeddings: List[torch.Tensor] = []
+    total_duration_sec: float = 0.0
+    original_sample_rate: int = 16000
 
     try:
-        content = await file.read()
-        if not content:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Uploaded audio file is empty.",
-            )
+        for idx, upload in enumerate(all_files):
+            content = await upload.read()
+            if not content:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Audio recording #{idx + 1} ({upload.filename or 'unnamed'}) is empty.",
+                )
 
-        # Validate and convert audio to 16 kHz mono float32
-        audio_stream = io.BytesIO(content)
-        audio = load_and_validate_audio(audio_stream, min_duration_sec=0.8)
+            # Validate and convert audio to 16 kHz mono float32
+            audio_stream = io.BytesIO(content)
+            try:
+                audio = load_and_validate_audio(audio_stream, min_duration_sec=0.8)
+            except AudioValidationError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Recording #{idx + 1} ({upload.filename or 'sample'}) validation failed: {e}",
+                ) from e
 
-        # Extract 192-dimensional unit-norm embedding
-        embedding = model.extract_embedding(audio.waveform)
+            # Extract 192-dimensional unit-norm embedding
+            embedding = model.extract_embedding(audio.waveform)
+            extracted_embeddings.append(embedding)
+            total_duration_sec += audio.duration_sec
+            original_sample_rate = audio.sample_rate
+
+        # Combine multiple embeddings into a single unit-normalized vector
+        combined_embedding = combine_enrollment_embeddings(extracted_embeddings)
 
         metadata = storage.save_volunteer(
             demo_id=clean_id,
-            embedding=embedding,
-            duration_sec=audio.duration_sec,
-            original_sample_rate=audio.sample_rate,
+            embedding=combined_embedding,
+            duration_sec=total_duration_sec,
+            original_sample_rate=original_sample_rate,
             model_name=model.model_name,
+            num_enrollment_samples=len(extracted_embeddings),
             save_raw_audio=False,
         )
 
@@ -182,10 +223,11 @@ async def enroll_volunteer(
             "success": True,
             "demo_id": metadata.demo_id,
             "duration_sec": metadata.audio_duration_sec,
-            "message": "Voice profile successfully enrolled.",
+            "num_samples": metadata.num_enrollment_samples,
+            "message": f"Voice profile successfully enrolled with {len(extracted_embeddings)} recording sample(s).",
         }
-    except AudioValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Enrollment failed for demo_id '%s'", clean_id)
         raise HTTPException(
@@ -281,9 +323,10 @@ class DatasetPathRequest(BaseModel):
 
 class EvaluationRunRequest(BaseModel):
     path: str
-    num_genuine: int = 20
-    num_imposter: int = 20
+    num_genuine: int = 100
+    num_imposter: int = 100
     enable_split: bool = True
+    seed: int = 42
 
 
 @app.post("/api/evaluation/validate-dataset")
@@ -302,7 +345,11 @@ async def validate_dataset(req: DatasetPathRequest) -> Dict[str, Any]:
 
 @app.post("/api/evaluation/run")
 async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
-    """Executes empirical verification benchmarking over real audio file pairs."""
+    """Executes empirical verification benchmarking over real audio file pairs.
+
+    Utilizes an in-memory embedding cache so audio files appearing in multiple trial pairs
+    do not trigger redundant model inferences.
+    """
     adapter = LibriSpeechAdapter(req.path)
     summary = adapter.validate()
     if not summary.is_valid:
@@ -313,6 +360,18 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
 
     model = get_model()
 
+    # Embedding cache: maps canonical audio file path -> 1D embedding tensor
+    embedding_cache: Dict[str, torch.Tensor] = {}
+
+    def get_embedding(path: Path) -> torch.Tensor:
+        canonical_key = str(path.resolve())
+        if canonical_key in embedding_cache:
+            return embedding_cache[canonical_key]
+        audio = load_and_validate_audio(path, min_duration_sec=0.5)
+        emb = model.extract_embedding(audio.waveform)
+        embedding_cache[canonical_key] = emb
+        return emb
+
     def _evaluate_batch(
         batch: List[TrialPair],
     ) -> tuple[List[EvaluatedTrial], List[dict]]:
@@ -320,12 +379,8 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
         skipped: List[dict] = []
         for t in batch:
             try:
-                audio_a = load_and_validate_audio(t.path_a, min_duration_sec=0.5)
-                audio_b = load_and_validate_audio(t.path_b, min_duration_sec=0.5)
-
-                emb_a = model.extract_embedding(audio_a.waveform)
-                emb_b = model.extract_embedding(audio_b.waveform)
-
+                emb_a = get_embedding(t.path_a)
+                emb_b = get_embedding(t.path_b)
                 sim = compute_cosine_similarity(emb_a, emb_b)
                 evaluated.append(
                     EvaluatedTrial(
@@ -355,13 +410,14 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
             num_genuine=req.num_genuine,
             num_imposter=req.num_imposter,
             speaker_subset=cal_speakers,
-            seed=42,
+            seed=req.seed,
         )
+        test_seed = req.seed + 58  # Independent reproducible seed for held-out evaluation
         test_trials = adapter.generate_trials(
             num_genuine=req.num_genuine,
             num_imposter=req.num_imposter,
             speaker_subset=eval_speakers,
-            seed=100,
+            seed=test_seed,
         )
 
         cal_eval, cal_skip = _evaluate_batch(cal_trials)
@@ -380,6 +436,11 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
         # Measure performance strictly on held-out test partition at calibrated threshold
         test_metric = compute_metrics_at_threshold(test_eval, threshold=calibrated_threshold)
 
+        cal_gen_count = sum(1 for t in cal_eval if t.is_genuine)
+        cal_imp_count = sum(1 for t in cal_eval if not t.is_genuine)
+        test_gen_count = sum(1 for t in test_eval if t.is_genuine)
+        test_imp_count = sum(1 for t in test_eval if not t.is_genuine)
+
         return {
             "success": True,
             "protocol": "calibration_split",
@@ -388,8 +449,18 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
             "test_frr": float(test_metric.frr),
             "test_accuracy": float(test_metric.accuracy),
             "total_trials": len(cal_eval) + len(test_eval),
+            "trial_breakdown": {
+                "requested_per_partition": {"genuine": req.num_genuine, "imposter": req.num_imposter},
+                "calibration_evaluated": {"genuine": cal_gen_count, "imposter": cal_imp_count},
+                "test_evaluated": {"genuine": test_gen_count, "imposter": test_imp_count},
+            },
+            "calibration_seed": req.seed,
+            "evaluation_seed": test_seed,
+            "seeds": {"calibration_seed": req.seed, "evaluation_seed": test_seed},
+            "cache_stats": {"unique_recordings_cached": len(embedding_cache)},
             "skipped_trials": cal_skip + test_skip,
             "note": split_note,
+            "disclaimer": "Evaluated on clean audiobook speech (LibriSpeech test-clean). Does not establish performance on telephone banking audio.",
         }
 
     else:
@@ -398,7 +469,7 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
             num_genuine=req.num_genuine,
             num_imposter=req.num_imposter,
             speaker_subset=None,
-            seed=42,
+            seed=req.seed,
         )
         evaluated, skipped = _evaluate_batch(trials)
 
@@ -412,6 +483,9 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
         eer_metric = find_empirical_eer(sweep)
         operating_threshold = eer_metric.threshold if eer_metric else 0.25
 
+        gen_count = sum(1 for t in evaluated if t.is_genuine)
+        imp_count = sum(1 for t in evaluated if not t.is_genuine)
+
         return {
             "success": True,
             "protocol": "unsplit_dev_preview",
@@ -420,6 +494,13 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
             "test_frr": float(eer_metric.frr if eer_metric else 0.0),
             "test_accuracy": float(eer_metric.accuracy if eer_metric else 0.0),
             "total_trials": len(evaluated),
+            "trial_breakdown": {
+                "requested": {"genuine": req.num_genuine, "imposter": req.num_imposter},
+                "evaluated": {"genuine": gen_count, "imposter": imp_count},
+            },
+            "seeds": {"seed": req.seed},
+            "cache_stats": {"unique_recordings_cached": len(embedding_cache)},
             "skipped_trials": skipped,
             "note": "Development Preview Mode: Evaluated across available data without disjoint partition.",
+            "disclaimer": "Evaluated on clean audiobook speech (LibriSpeech test-clean). Does not establish performance on telephone banking audio.",
         }

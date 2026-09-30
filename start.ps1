@@ -14,7 +14,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $ScriptDir
 
 $VenvPython = Join-Path $ScriptDir ".venv\Scripts\python.exe"
-$VenvUvicorn = Join-Path $ScriptDir ".venv\Scripts\uvicorn.exe"
+$VenvStreamlit = Join-Path $ScriptDir ".venv\Scripts\streamlit.exe"
 
 if (-not (Test-Path $VenvPython)) {
     Write-Host "[ERROR] Virtual environment not found at: $ScriptDir\.venv" -ForegroundColor Red
@@ -29,19 +29,19 @@ if (-not (Test-Path $VenvPython)) {
 }
 
 Write-Host "[1/3] Virtual environment detected." -ForegroundColor Green
-Write-Host "[2/3] Scheduling browser launch at http://127.0.0.1:8000 ..." -ForegroundColor Green
+Write-Host "[2/3] Scheduling browser launch at http://127.0.0.1:8501 ..." -ForegroundColor Green
 
 # Launch browser in separate background process after a brief 2s delay
-Start-Process powershell -ArgumentList "-NoProfile", "-Command", "Start-Sleep -Seconds 2; Start-Process 'http://127.0.0.1:8000'" -WindowStyle Hidden
+Start-Process powershell -ArgumentList "-NoProfile", "-Command", "Start-Sleep -Seconds 2; Start-Process 'http://127.0.0.1:8501'" -WindowStyle Hidden
 
-Write-Host "[3/3] Launching FastAPI server on http://127.0.0.1:8000 ..." -ForegroundColor Green
+Write-Host "[3/3] Launching Streamlit application on http://127.0.0.1:8501 ..." -ForegroundColor Green
 Write-Host "      Press Ctrl+C to stop the application." -ForegroundColor Yellow
 Write-Host ""
 
 try {
-    & $VenvUvicorn src.server:app --host 127.0.0.1 --port 8000
+    & $VenvStreamlit run app.py --server.address 127.0.0.1 --server.port 8501
 } catch {
     Write-Host ""
-    Write-Host "[ERROR] Server terminated: $_" -ForegroundColor Red
+    Write-Host "[ERROR] Application terminated: $_" -ForegroundColor Red
     Read-Host "Press Enter to close"
 }

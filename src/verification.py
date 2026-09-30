@@ -14,7 +14,7 @@ empirical calibration on target domain audio.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Union
+from typing import List, Sequence, Union
 
 import numpy as np
 import torch
@@ -107,3 +107,66 @@ def verify_speakers(
         is_match=is_match,
         explanation=explanation,
     )
+
+
+def combine_enrollment_embeddings(
+    embeddings: Sequence[Union[torch.Tensor, np.ndarray]],
+) -> torch.Tensor:
+    """Combines multiple speaker embedding vectors into a single unit-normalized representation.
+
+    Computes the element-wise arithmetic mean across the embedding vectors and L2-normalizes
+    the resulting vector onto the unit hypersphere. This improves enrollment robustness by
+    averaging phonetic and acoustic variation across multiple recording takes.
+
+    Args:
+        embeddings: Sequence of 1D tensors or numpy arrays representing speaker embeddings.
+
+    Returns:
+        1D torch.Tensor of unit length (L2 norm = 1.0).
+
+    Raises:
+        ValueError: If embeddings sequence is empty, vectors have mismatched dimensions,
+                    or the mean vector has zero magnitude.
+    """
+    if not embeddings:
+        raise ValueError("At least one audio embedding is required for enrollment.")
+
+    tensors: List[torch.Tensor] = []
+    dim: int | None = None
+
+    for idx, emb in enumerate(embeddings):
+        if isinstance(emb, np.ndarray):
+            t = torch.from_numpy(emb).view(-1).float()
+        elif isinstance(emb, torch.Tensor):
+            t = emb.view(-1).float()
+        else:
+            raise TypeError(f"Embedding at index {idx} has unsupported type: {type(emb)}")
+
+        if dim is None:
+            dim = t.shape[0]
+            if dim == 0:
+                raise ValueError("Embedding dimension cannot be zero.")
+        elif t.shape[0] != dim:
+            raise ValueError(
+                f"Embedding dimension mismatch: vector at index {idx} has dimension {t.shape[0]}, "
+                f"expected {dim}."
+            )
+
+        # L2-normalize individual embedding first to ensure equal weighting
+        norm_t = torch.norm(t, p=2)
+        if norm_t > 0:
+            t = t / norm_t
+        tensors.append(t)
+
+    # Element-wise mean across all enrollment samples
+    stacked = torch.stack(tensors, dim=0)
+    mean_vec = torch.mean(stacked, dim=0)
+
+    # L2-normalize the combined vector
+    final_norm = torch.norm(mean_vec, p=2)
+    if final_norm == 0.0:
+        raise ValueError("Combined enrollment embedding has zero magnitude.")
+
+    normalized_combined = (mean_vec / final_norm).cpu()
+    return normalized_combined
+

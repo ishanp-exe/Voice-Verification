@@ -12,11 +12,12 @@ Customer Voice Authentication is an internship-level prototype demonstrating 1:1
 
 ### Key Objectives:
 - **Modular 1:1 Verification Engine**: Extract fixed-dimensional speaker embeddings using SpeechBrain's pretrained ECAPA-TDNN architecture and compare them via cosine similarity.
-- **Modern 21st.dev UI & Local Web App**: Clean, high-contrast, dark-mode single-page application built with FastAPI and vanilla HTML/CSS/JavaScript (no Streamlit, no React, no Node.js build system).
-- **Native Browser Microphone Recording**: Custom Web Audio API recorder that encodes 16-bit PCM WAV at 16 kHz directly client-side, allowing recording without requiring system FFmpeg on Windows.
+- **Modern 21st.dev UI in Streamlit**: Polished, high-contrast, dark-mode analytics application built with Streamlit and styled with 21st.dev-inspired cards, hero spotlight, subtle scroll progress, and glassmorphic stats.
+- **Native Browser Microphone Recording & Upload**: In-browser audio capture via Streamlit's native audio input (`st.audio_input`) and file upload (`st.file_uploader`) supporting `.wav`, `.flac`, `.mp3`, and `.ogg`.
+- **Multi-Sample Volunteer Enrollment**: Combine multiple takes via element-wise arithmetic mean and unit $L_2$-normalization into a single robust template without retaining raw audio.
 - **Volunteer Demo Mode**: Enable safe, consent-driven voice enrollment and verification with full local data privacy and instant data purging controls.
-- **LibriSpeech Evaluation Mode**: In-situ benchmarking on external LibriSpeech audio, with a disciplined calibration vs. independent test split protocol, reporting empirical False Accept Rate (FAR), False Reject Rate (FRR), accuracy, and threshold trade-offs.
-- **HCL Dataset Readiness**: Decouple dataset loading through an abstract adapter interface so an official HCL dataset adapter can be integrated seamlessly once requirements are known.
+- **LibriSpeech Evaluation Mode**: In-situ benchmarking on external LibriSpeech audio, with a disciplined calibration vs. independent test split protocol, in-memory embedding caching for repeated trials, and empirical False Accept Rate (FAR), False Reject Rate (FRR), accuracy, and threshold trade-offs.
+- **Modular Dataset Architecture**: Decouple dataset loading through an abstract adapter interface (`BaseSpeakerDatasetAdapter`) so domain-specific evaluation datasets can be integrated seamlessly once available.
 
 ---
 
@@ -25,31 +26,26 @@ Customer Voice Authentication is an internship-level prototype demonstrating 1:1
 ```text
 Voice-Verification/
 ├── .gitignore                   # Strict exclusion of data, recordings, embeddings, caches, venv
-├── requirements.txt             # Dependencies (PyTorch, Torchaudio, SpeechBrain, FastAPI, Uvicorn)
+├── requirements.txt             # Dependencies (PyTorch, Torchaudio, SpeechBrain, Streamlit, FastAPI)
 ├── pyproject.toml               # Modern build configuration and package metadata
-├── start.bat                    # Windows 1-click launcher (starts server & opens browser)
+├── start.bat                    # Windows 1-click launcher (starts Streamlit & opens browser)
 ├── start.ps1                    # PowerShell 1-click launcher
+├── app.py                       # Main Streamlit user interface (21st.dev styling & full workflow)
 ├── README.md                    # Project documentation and run guide
 ├── docs/
 │   └── PROJECT_SYNOPSIS.md      # Formal internship project synopsis
 ├── src/
 │   ├── __init__.py
-│   ├── server.py                # FastAPI backend app, REST endpoints, and static file mount
 │   ├── audio.py                 # Audio ingestion, validation (format/length), 16 kHz mono conversion
 │   ├── model.py                 # Pretrained ECAPA-TDNN model wrapper (frozen weights)
-│   ├── verification.py          # Cosine similarity computation & threshold decision logic
+│   ├── verification.py          # Cosine similarity computation & multi-sample vector combining
 │   ├── storage.py               # Local volunteer profiles, metadata, and deletion routines
 │   ├── dataset_eval.py          # External LibriSpeech adapter & trial pair generator
 │   ├── metrics.py               # Empirical FAR, FRR, and EER calculations
-│   └── static/                  # 21st.dev inspired modern frontend
-│       ├── index.html           # Semantic HTML5 layout with 2 tabs
-│       ├── css/
-│       │   └── styles.css       # Dark glassmorphism, radial glow accents, metrics cards
-│       └── js/
-│           ├── recorder.js      # Pure client-side 16 kHz PCM WAV encoder & waveform canvas
-│           └── app.js           # Frontend controller for REST API interactions
+│   └── server.py                # Optional FastAPI backend app & static file endpoints
 └── tests/
-    ├── test_api.py              # FastAPI endpoint tests using TestClient
+    ├── test_streamlit_app.py    # Streamlit AppTest integration test for app.py
+    ├── test_api.py              # Backend REST endpoint tests using TestClient
     └── test_components.py       # Core audio, verification, storage, and metrics unit tests
 ```
 
@@ -70,8 +66,8 @@ Double-click `start.bat` in the project root, or execute from PowerShell:
 ```
 This launcher:
 1. Validates the `.venv` Python virtual environment.
-2. Automatically launches your default web browser to `http://127.0.0.1:8000`.
-3. Runs the local FastAPI server with Uvicorn.
+2. Automatically launches your default web browser to `http://127.0.0.1:8501`.
+3. Runs the local Streamlit application.
 
 Alternatively, for PowerShell:
 ```powershell
@@ -114,9 +110,9 @@ Alternatively, for PowerShell:
 
 4. **Start the application manually**:
    ```powershell
-   .\.venv\Scripts\uvicorn src.server:app --host 127.0.0.1 --port 8000
+   .\.venv\Scripts\streamlit run app.py --server.address 127.0.0.1 --server.port 8501
    ```
-   Open your browser to `http://127.0.0.1:8000`.
+   Open your browser to `http://127.0.0.1:8501`.
 
 ---
 
@@ -125,13 +121,14 @@ Alternatively, for PowerShell:
 ### Mode 1: Volunteer Demo Mode
 Designed for interactive, privacy-preserving testing with volunteers:
 1. **Informed Consent**: Review the privacy notice and check the consent box to activate controls.
-2. **Speaker Enrollment**:
-   - Generate a random Demo ID (e.g., `VOL-7281`).
-   - Use the **Browser Microphone** to record live audio (with real-time waveform visualizer), or upload an audio file (`.wav`, `.flac`, `.mp3`, `.ogg`) of at least 1.0 second duration.
-   - Click **Enroll Voice Profile**. The system extracts and stores a 192-dimensional vector. *Note: Enrolling does not train or modify the neural network.*
+2. **Multi-Sample Speaker Enrollment**:
+   - Generate an anonymized Demo ID (e.g., `VOL-7281`).
+   - Use the **Browser Microphone** to record 1 or more distinct audio takes (with real-time waveform visualizer), or upload audio files (`.wav`, `.flac`, `.mp3`, `.ogg`) of at least 0.8 second duration each.
+   - Click **➕ Add to Enrollment Set** after each recording to stage multiple takes.
+   - Click **Enroll Voice Profile**. The system extracts an embedding for each recording and combines them via arithmetic mean and unit L2-normalization into one unified template. Raw audio is discarded immediately. *Note: Enrolling does not train or modify the neural network.*
 3. **1:1 Verification**:
    - Select the enrolled Demo ID from the dropdown.
-   - Record or upload a new candidate audio sample.
+   - Record or upload a single candidate audio sample.
    - Adjust the **Decision Threshold** slider.
    - Click **Verify Candidate Voice** to view the computed cosine similarity score, threshold pin, decision margin, and match verdict.
 4. **Data Purging**:
@@ -139,23 +136,25 @@ Designed for interactive, privacy-preserving testing with volunteers:
 
 ### Mode 2: LibriSpeech Evaluation Mode
 Designed for benchmarking verification error metrics on external corpus data:
-1. **Temporary Dataset Notice**: LibriSpeech contains clean audiobook narrations and does not represent telephone banking audio. The official dataset will be provided by HCL later.
+1. **Corpus Scope Notice**: LibriSpeech contains clean audiobook narrations and does not represent telephone banking audio. A domain-specific dataset can be integrated at a later stage.
 2. **Directory Selection**:
    - Provide the path to your extracted `LibriSpeech` or `test-clean` folder located **outside** this repository (e.g., `C:\Users\ishan\Downloads\LibriSpeech\test-clean`).
    - The app reads files in-place and **will not move or copy** the dataset.
-3. **Trial Configuration & Disciplined Protocol**:
-   - Specify the desired count of Genuine (same-speaker) and Imposter (different-speaker) trial pairs.
+3. **Trial Configuration & In-Memory Caching**:
+   - Specify the desired count of Genuine (same-speaker) and Imposter (different-speaker) trial pairs (defaults to 100 of each per partition).
+   - In-memory embedding caching ensures audio files appearing across multiple trial pairs do not trigger redundant model inferences.
    - **Calibration & Test Split**: When enabled on a dataset with sufficient speakers ($\ge 6$ speakers with $\ge 4$ multi-sample speakers), the system partitions data into disjoint sets:
      - **Stage 1 (Calibration)**: The operating threshold $\tau_{cal}$ is determined strictly on the calibration partition where $|FAR - FRR|$ is minimized.
      - **Stage 2 (Held-Out Test Evaluation)**: Unbiased final performance metrics (Test FAR, Test FRR, Test Accuracy) are measured on the unseen evaluation partition using $\tau_{cal}$.
      - *Methodological Discipline*: The system explicitly avoids calculating an "EER threshold" on the evaluation set itself, preventing optimistic post-hoc test bias.
    - **Development Preview**: If the dataset has too few speakers or the split is disabled, the system clearly labels output as a Development Preview across available trials.
-   - **Transparent Error Reporting**: Any unreadable or corrupted audio trials are logged and displayed with filenames and error reasons rather than silently skipped.
+   - **Transparent Reporting**: Reports exact trial breakdown, calibration and evaluation seeds, cache statistics, and any unreadable/skipped files.
 
 ---
 
 ## 6. Privacy & Data Handling Practices
 - **Strictly Local Processing**: Audio files and embeddings remain on the local machine. No data is transmitted to cloud services or external APIs.
+- **Tightened Local API Access**: The FastAPI application is bound strictly to `127.0.0.1` and CORS is restricted to local application origins (`http://127.0.0.1:8000`, `http://localhost:8000`).
 - **Minimal Retention**: By default, raw audio is discarded immediately following embedding extraction. Only mathematical embedding vectors and non-PII metadata (`metadata.json`) are stored.
 - **Git Safety**: The `data/` directory, model cache, audio files, and virtual environments are explicitly excluded via `.gitignore` to prevent accidental commits of biometric data.
 - **Instant Deletion**: Volunteers have full control to permanently remove their enrolled templates at any time.
@@ -173,7 +172,7 @@ Designed for benchmarking verification error metrics on external corpus data:
 - **No Anti-Spoofing / Presentation Attack Detection (PAD)**: Vulnerable to replays, text-to-speech synthesis, and deepfakes.
 - **No 1:N Identification**: Evaluates one-to-one identity claims only.
 - **Domain Discrepancy**: Pretrained models trained on studio/audiobook audio may experience reduced performance on narrow-band (8 kHz) telephony audio.
-- **HCL Dataset**: The official project dataset will be delivered by HCL later. No assumptions about HCL data structure or licensing are made in this release.
+- **Enterprise Dataset Roadmap**: Domain-specific banking datasets can be integrated via the modular `BaseSpeakerDatasetAdapter` interface.
 
 ---
 
@@ -183,4 +182,4 @@ To run the automated unit and API test suite from the repository root in PowerSh
 ```powershell
 .\.venv\Scripts\pytest -v
 ```
-All 28 tests utilize mocked embedding outputs to verify code paths, validation logic, metrics formulas, REST endpoints, and storage operations in test isolation without requiring GPU hardware or Internet access.
+All automated tests utilize mocked embedding outputs to verify code paths, multi-sample combining math, validation logic, metrics formulas, REST endpoints, and storage operations in test isolation without requiring GPU hardware or Internet access.
