@@ -1,14 +1,14 @@
 # Formal Project Synopsis
 
 ## 1. Project Title
-**Customer Voice Authentication: An Educational Prototype for Biometric Speaker Verification in Banking Workflows**
+**VoxKey: An Educational Voice-Verification Prototype**
 
 ---
 
 ## 2. Abstract
 Customer identity verification is a cornerstone of modern financial services, where conventional knowledge-based authentication methods (such as passwords, OTPs, and security questions) increasingly suffer from vulnerabilities to phishing, credential stuffing, and social engineering. Voice biometrics offers an intuitive, friction-reducing modality for speaker verification. This project details the design and implementation of an educational, proof-of-concept voice authentication system modeled for a simulated banking context.
 
-Engineered as an internship-level learning prototype, the system leverages deep representation learning via SpeechBrain's pretrained ECAPA-TDNN architecture, executing within a PyTorch/Torchaudio framework, served by a local FastAPI backend, and controlled through a modern 21st.dev-inspired vanilla web interface. The architecture extracts fixed-dimensional speaker embeddings from acoustic utterances and computes pairwise cosine similarity against an operational decision threshold. The prototype implements two core workflows: an in-person, consent-governed **Volunteer Demo Mode** for live speaker enrollment (via browser microphone or file upload), verification, and on-demand data purging, and an offline **LibriSpeech Evaluation Mode** for measuring biometric error curves across genuine and imposter trial pairs. 
+Engineered as an internship-level learning prototype, the system leverages deep representation learning via SpeechBrain's pretrained ECAPA-TDNN architecture, executing within a PyTorch/Torchaudio framework, served by a local FastAPI backend, and controlled through a modern dark analytics web interface. The architecture extracts fixed-dimensional speaker embeddings from acoustic utterances and computes pairwise cosine similarity against an operational decision threshold. The prototype implements two core workflows: an in-person, consent-governed **Volunteer Demo Mode** for live speaker enrollment (via browser microphone or file upload), verification, and on-demand data purging, and an offline **LibriSpeech Evaluation Mode** for measuring biometric error curves across genuine and imposter trial pairs. 
 
 **Critical Boundary**: This project is strictly an internship-level academic prototype; it does not constitute a production banking security system and must **never** be deployed to authenticate real banking customers or authorize financial transactions.
 
@@ -28,7 +28,7 @@ However, studying and integrating speaker-embedding pipelines involves significa
 ## 4. Objectives
 The key objectives of this project are:
 1. **Develop an Educational 1:1 Verification Engine**: Build a modular Python application leveraging PyTorch, Torchaudio, and SpeechBrain’s pretrained ECAPA-TDNN model to extract speaker embeddings and perform cosine similarity comparisons.
-2. **Implement an Intuitive, Responsive Web Interface**: Provide a polished, dark-mode Streamlit application (styled with 21st.dev design principles including hero spotlight, glassmorphic stat cards, and scroll indicator) that visualizes similarity scores alongside user-adjustable decision thresholds, outputting transparent match/no-match decisions.
+2. **Implement an Intuitive, Responsive Web Interface**: Provide a polished, dark-mode Streamlit application (styled with modern design principles including hero spotlight, glassmorphic stat cards, and scroll indicator) that visualizes similarity scores alongside user-adjustable decision thresholds, outputting transparent match/no-match decisions.
 3. **Establish a Safe Volunteer Demonstration Workflow**: Allow consenting volunteers to enroll via single or multi-sample browser audio or uploaded files under randomized demo IDs, test candidate samples, inspect stored metadata, and permanently purge their data from the local machine.
 4. **Build a Standardized Evaluation Harness**: Provide an evaluation adapter for an external LibriSpeech `test-clean` dataset to programmatically construct genuine (same-speaker) and imposter (different-speaker) trial pairs using the identical verification pipeline with in-memory embedding caching.
 5. **Empirical Performance Measurement**: Calculate and graph empirical verification metrics (FAR, FRR, accuracy, and empirical EER) strictly from actual trial runs without inventing or fabricating results.
@@ -110,7 +110,7 @@ The system is constructed with a decoupled, modular architecture where both user
 - **Programming Language**: Python 3.10+
 - **Deep Learning Framework**: PyTorch and Torchaudio
 - **Pretrained Biometric Models**: SpeechBrain (`speechbrain/spkrec-ecapa-voxceleb`)
-- **Web Interface**: Streamlit (styled with 21st.dev-inspired cards, hero spotlight, and glassmorphic telemetry readouts)
+- **Web Interface**: Streamlit (styled with modern cards, hero spotlight, and glassmorphic telemetry readouts)
 - **Audio I/O & Signal Processing**: SoundFile, NumPy, SciPy, native Streamlit audio input (`st.audio_input`)
 - **Dataset Audit & Validation**: Repeatable Python validation script (`scripts/clean_validate_dataset.py`) producing SHA-256 integrity logs and validated index CSVs
 - **Data Analysis & Export**: Pandas, JSON/CSV export utilities
@@ -164,4 +164,4 @@ Subsequent project phases may investigate:
 ---
 
 ## 12. Conclusion
-The Customer Voice Authentication prototype offers a structured, transparent exploration of biometric speaker verification. By leveraging SpeechBrain's ECAPA-TDNN model within an accessible FastAPI and modern vanilla web application, the project highlights key operational concepts—including embedding representation, metric comparison, decision boundaries, and error trade-offs. By prioritizing volunteer consent, local data residency, and clear architectural boundaries, the project provides a solid, responsible foundation for academic study and future dataset integration.
+The VoxKey educational voice-verification prototype offers a structured, transparent exploration of biometric speaker verification. By leveraging SpeechBrain's ECAPA-TDNN model within an accessible FastAPI and modern vanilla web application, the project highlights key operational concepts—including embedding representation, metric comparison, decision boundaries, and error trade-offs. By prioritizing volunteer consent, local data residency, and clear architectural boundaries, the project provides a solid, responsible foundation for academic study and future dataset integration.

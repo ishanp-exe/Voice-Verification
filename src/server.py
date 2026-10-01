@@ -1,6 +1,6 @@
-"""FastAPI backend server for Customer Voice Authentication prototype.
+"""FastAPI backend server for VoxKey prototype.
 
-Serves the modern 21st.dev-inspired web interface, REST endpoints for volunteer
+Serves the modern dark analytics web interface, REST endpoints for volunteer
 voice enrollment, verification, profile lifecycle management, and corpus evaluation.
 """
 
@@ -38,8 +38,8 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI application
 app = FastAPI(
-    title="Customer Voice Authentication",
-    description="Educational prototype for 1:1 speaker verification using SpeechBrain ECAPA-TDNN.",
+    title="VoxKey",
+    description="Educational voice-verification prototype using SpeechBrain ECAPA-TDNN.",
     version="1.0.0",
 )
 

@@ -1,8 +1,8 @@
-"""Customer Voice Authentication - Streamlit Application.
+"""VoxKey - Streamlit Application.
 
 An internship-level educational prototype for 1:1 voice biometric verification.
 Features:
-- 21st.dev-inspired modern analytics UI with hero spotlight card and glassmorphic styling
+- Modern dark analytics UI with hero carousel and glassmorphic styling
 - Multi-sample volunteer enrollment with vector averaging and unit L2-normalization
 - 1:1 candidate verification with configurable decision threshold
 - Profile governance with permanent disk purging
@@ -24,6 +24,7 @@ import torch
 
 from src.audio import AudioValidationError, load_and_validate_audio
 from src.dataset_eval import LibriSpeechAdapter, TrialPair
+from src.hero_carousel import render_hero_carousel
 from src.metrics import (
     EvaluatedTrial,
     compute_metric_sweep,
@@ -42,14 +43,14 @@ from src.verification import (
 # Page Configuration
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Customer Voice Authentication",
+    page_title="VoxKey",
     page_icon="🎙️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # -----------------------------------------------------------------------------
-# 21st.dev Inspired Styling (Hero Spotlight, Glassmorphic Cards, Responsive Motion)
+# Modern Dark Analytics Styling (Hero Spotlight, Glassmorphic Cards, Responsive Motion)
 # -----------------------------------------------------------------------------
 CUSTOM_CSS = """
 <style>
@@ -64,7 +65,7 @@ code, kbd, samp, pre {
     font-family: 'JetBrains Mono', monospace !important;
 }
 
-/* Scroll progress indicator (subtle 21st.dev scroll effect) */
+/* Scroll progress indicator (subtle scroll effect) */
 #scroll-progress-bar {
     position: fixed;
     top: 0;
@@ -88,7 +89,7 @@ code, kbd, samp, pre {
     }
 }
 
-/* 21st.dev Hero Card with Spotlight Effect */
+/* Hero Card with Spotlight Effect */
 .hero-card {
     position: relative;
     background: radial-gradient(circle at top left, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.95));
@@ -150,7 +151,7 @@ code, kbd, samp, pre {
     margin-bottom: 0;
 }
 
-/* Reusable Glassmorphic 21st.dev Card */
+/* Reusable Glassmorphic Card */
 .stat-card {
     background: rgba(30, 41, 59, 0.5);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -234,6 +235,67 @@ code, kbd, samp, pre {
     color: #cbd5e1;
     margin: 1rem 0;
 }
+
+/* Primary AGON Gold Action Buttons */
+.stButton > button[kind="primary"] {
+    background: #F59E0B !important;
+    color: #0B0D11 !important;
+    border: none !important;
+    font-weight: 800 !important;
+    border-radius: 9px !important;
+    box-shadow: 0 4px 18px rgba(245, 158, 11, 0.28) !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.stButton > button[kind="primary"]:hover {
+    background: #FBBF24 !important;
+    color: #000000 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 22px rgba(245, 158, 11, 0.4) !important;
+}
+
+.stButton > button[kind="primary"]:disabled {
+    background: #1C212D !important;
+    color: #555C6E !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+/* Secondary Action Buttons */
+.stButton > button[kind="secondary"] {
+    background: rgba(22, 27, 38, 0.85) !important;
+    border: 1px solid #2E364A !important;
+    color: #F0F2F7 !important;
+    font-weight: 600 !important;
+    border-radius: 9px !important;
+    transition: all 0.2s ease !important;
+}
+
+.stButton > button[kind="secondary"]:hover {
+    background: rgba(35, 42, 58, 0.95) !important;
+    border-color: rgba(245, 158, 11, 0.5) !important;
+    color: #FBBF24 !important;
+}
+
+/* Staging Telemetry Deck */
+.telemetry-card {
+    background: #0F1218;
+    border: 1px solid #242936;
+    border-radius: 12px;
+    padding: 1.3rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.telemetry-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, #F59E0B, transparent);
+}
 </style>
 
 <div id="scroll-progress-bar"></div>
@@ -294,7 +356,10 @@ if "evaluation_results" not in st.session_state:
 # Sidebar: System Governance, Status & Ambient Visualizer
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("### 🎙️ Core Biometrics Engine")
+    st.markdown("## 🎙️ **VoxKey**")
+    st.caption("Educational Voice-Verification Prototype")
+    st.markdown("---")
+    st.markdown("### Core Biometrics Engine")
 
     # Load Model with visual feedback
     try:
@@ -316,46 +381,56 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    st.markdown("### 🎨 Ambient 3D Visualization")
-    show_spline = st.checkbox("Show 3D Voice Orb (Spline)", value=False, help="Interactive 3D voice wave orb. Optional and purely decorative; does not affect biometric processing.")
-    
-    if show_spline:
-        st.caption("Interactive sound wave visualization (purely ambient):")
-        # Lightweight embed with local graceful fallback
-        spline_html = """
-        <div style="width: 100%; height: 220px; border-radius: 12px; overflow: hidden; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); position: relative;">
-            <iframe src="https://my.spline.design/soundwaveorb-f0278fb4de391ba5f2ce360ea1003468/" 
-                    frameborder="0" width="100%" height="100%" loading="lazy"
-                    title="Ambient Sound Wave Scene"
-                    style="pointer-events: auto;">
-            </iframe>
+    st.markdown("### 🎛️ Ambient Audio Visualizer")
+    show_ambient = st.checkbox(
+        "Show Voice Wave Monitor",
+        value=False,
+        help="Local CSS sound wave monitor. Optional and purely decorative; zero external network requests or dependencies.",
+    )
+
+    if show_ambient:
+        st.caption("Live CSS sound wave monitor (purely ambient, zero remote calls):")
+        ambient_html = """
+        <div style="width: 100%; height: 110px; border-radius: 12px; background: #0F1218; border: 1px solid #242936; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px;">
+            <div style="display: flex; align-items: center; gap: 4px; height: 48px;">
+                <div style="width: 4px; height: 18px; background: #F59E0B; border-radius: 2px; animation: bar1 1.1s ease-in-out infinite alternate;"></div>
+                <div style="width: 4px; height: 36px; background: #F59E0B; border-radius: 2px; animation: bar2 0.9s ease-in-out infinite alternate;"></div>
+                <div style="width: 4px; height: 24px; background: #EF4444; border-radius: 2px; animation: bar1 1.3s ease-in-out infinite alternate;"></div>
+                <div style="width: 4px; height: 42px; background: #EF4444; border-radius: 2px; animation: bar2 1.0s ease-in-out infinite alternate;"></div>
+                <div style="width: 4px; height: 30px; background: #EAB308; border-radius: 2px; animation: bar1 0.8s ease-in-out infinite alternate;"></div>
+                <div style="width: 4px; height: 46px; background: #EAB308; border-radius: 2px; animation: bar2 1.2s ease-in-out infinite alternate;"></div>
+                <div style="width: 4px; height: 20px; background: #F59E0B; border-radius: 2px; animation: bar1 1.4s ease-in-out infinite alternate;"></div>
+            </div>
+            <span style="font-family: monospace; font-size: 10px; color: #878E9F; text-transform: uppercase; letter-spacing: 0.05em;">16 kHz Acoustic Monitor</span>
+            <style>
+                @keyframes bar1 { 0% { height: 12px; opacity: 0.4; } 100% { height: 44px; opacity: 1; } }
+                @keyframes bar2 { 0% { height: 40px; opacity: 1; } 100% { height: 14px; opacity: 0.5; } }
+                @media (prefers-reduced-motion: reduce) { div { animation: none !important; } }
+            </style>
         </div>
         """
-        st.components.v1.html(spline_html, height=230)
+        st.components.v1.html(ambient_html, height=120)
     else:
-        st.caption("3D ambient scene disabled. Standard high-performance UI mode active.")
+        st.caption("Local audio monitor standby. High-performance UI mode active.")
 
     st.markdown("---")
     st.caption("Educational Biometric Prototype • Zero Cloud Dependencies")
 
 
 # -----------------------------------------------------------------------------
-# Main Hero Section (21st.dev Spotlight Card)
+# Main Hero Section (Dark-Mode Hero Carousel)
 # -----------------------------------------------------------------------------
-hero_html = f"""
-<div class="hero-card">
-    <div class="hero-spotlight"></div>
-    <div class="hero-badge">Biometric Analytics Prototype</div>
-    <div class="hero-title">Customer <span>Voice Authentication</span></div>
-    <div class="hero-desc">
-        A calibrated 1:1 speaker verification prototype built for educational research. 
-        Extracts 192-dimensional neural speaker embeddings via a pretrained ECAPA-TDNN model, 
-        combines multi-sample enrollment takes with unit $L_2$-normalization, and evaluates genuine vs. imposter 
-        cosine similarity against empirical thresholds.
+st.markdown(
+    """
+    <div style="display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 0.35rem;">
+        <h1 style="font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; color: #FFFFFF; margin: 0; line-height: 1;">VoxKey</h1>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 700; color: #F59E0B; text-transform: uppercase; letter-spacing: 0.06em;">Educational Voice-Verification Prototype</span>
     </div>
-</div>
-"""
-st.markdown(hero_html, unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True,
+)
+st.caption("🔒 Educational voice-verification prototype • Local ECAPA-TDNN 192-dim vectors • Zero cloud retention")
+render_hero_carousel(height=265)
 
 
 # -----------------------------------------------------------------------------
@@ -398,10 +473,22 @@ tab_enroll, tab_verify, tab_governance, tab_eval = st.tabs(
 # TAB 1: Multi-Sample Volunteer Voice Enrollment
 # =============================================================================
 with tab_enroll:
-    st.markdown("### 📥 Step 1: Multi-Sample Volunteer Voice Enrollment")
     st.markdown(
-        "Enroll a consenting volunteer by providing **one or more separate audio takes** (e.g., repeating a passphrase or speaking naturally). "
-        "The model extracts an embedding vector for each take and computes an element-wise arithmetic mean with unit $L_2$-normalization to establish a robust template."
+        """
+        <div style="margin-bottom: 1.4rem;">
+            <div style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.22rem 0.65rem; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 9999px; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 700; color: #FBBF24; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 0.5rem;">
+                <span style="width: 6px; height: 6px; border-radius: 50%; background: #F59E0B; display: inline-block;"></span> 01 // VOLUNTEER ONBOARDING
+            </div>
+            <h2 style="font-size: 1.55rem; font-weight: 800; color: #FFFFFF; letter-spacing: -0.02em; margin: 0 0 0.4rem 0;">
+                Step 1: Multi-Sample Volunteer Voice Enrollment
+            </h2>
+            <div style="color: #878E9F; font-size: 0.88rem; line-height: 1.55; max-width: 920px;">
+                Enroll a consenting volunteer by providing <b>one or more separate audio takes</b> (e.g., repeating a passphrase or speaking naturally). 
+                The model extracts an embedding vector for each take and computes an element-wise arithmetic mean with unit <i>L</i><sub>2</sub>-normalization to establish a robust template.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     if not volunteer_consent:
@@ -410,7 +497,15 @@ with tab_enroll:
     enroll_col_left, enroll_col_right = st.columns([0.55, 0.45], gap="large")
 
     with enroll_col_left:
-        st.markdown("#### 1. Identity & Audio Ingestion")
+        st.markdown(
+            """
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #242936; padding-bottom: 0.5rem; margin-bottom: 0.9rem;">
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; font-weight: 700; color: #878E9F; text-transform: uppercase; letter-spacing: 0.05em;">PANEL 1A // AUDIO INTAKE & IDENTITY</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 9999px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); color: #34D399;">● READY</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         id_col1, id_col2 = st.columns([0.7, 0.3])
         with id_col1:
@@ -502,39 +597,71 @@ with tab_enroll:
             )
 
     with enroll_col_right:
-        st.markdown("#### 2. Staged Enrollment Set")
-        st.caption(
-            "Combining multiple separate utterances captures vocal variability and produces a significantly more resilient enrollment vector."
+        st.markdown(
+            """
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #242936; padding-bottom: 0.5rem; margin-bottom: 0.9rem;">
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; font-weight: 700; color: #878E9F; text-transform: uppercase; letter-spacing: 0.05em;">PANEL 1B // EMBEDDING STAGING POOL</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 9999px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); color: #FBBF24;">● MULTI-TAKE MEAN</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
         staged_count = len(st.session_state.enrollment_takes)
         total_staged_duration = sum(t["duration"] for t in st.session_state.enrollment_takes)
 
+        status_chip = (
+            '<span style="color: #34D399; font-weight: 600;">● Ready to Compile</span>'
+            if staged_count > 0
+            else '<span style="color: #878E9F;">Waiting for audio take</span>'
+        )
+
         st.markdown(
             f"""
-            <div class="stat-card" style="margin-bottom: 1rem;">
-                <div class="stat-label">Staged Recordings</div>
-                <div class="stat-value">{staged_count} <span style="font-size: 1rem; font-weight: normal; color: #94a3b8;">sample(s)</span></div>
-                <div class="stat-sub">Total verified audio: {total_staged_duration:.2f}s (Mean + Unit L2-Norm)</div>
+            <div class="telemetry-card" style="margin-bottom: 1.1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.3rem;">
+                    <div>
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 2.6rem; font-weight: 800; color: #FFFFFF; line-height: 1;">{staged_count}</span>
+                        <span style="font-size: 1rem; font-weight: 600; color: #878E9F; margin-left: 6px;">sample(s) staged</span>
+                    </div>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;">
+                        {status_chip}
+                    </div>
+                </div>
+                <div style="font-size: 0.82rem; color: #878E9F; margin-bottom: 0.8rem;">
+                    Combining multiple utterances captures vocal variability and produces a significantly more resilient enrollment vector.
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; padding-top: 0.8rem; border-top: 1px solid rgba(255,255,255,0.06); font-family: 'JetBrains Mono', monospace; font-size: 0.74rem; color: #878E9F;">
+                    <div>Total Speech: <b style="color: #FFFFFF;">{total_staged_duration:.2f}s</b></div>
+                    <div>Format: <b style="color: #FFFFFF;">16 kHz Mono</b></div>
+                    <div>Norm Type: <b style="color: #FFFFFF;">Unit L2-Norm</b></div>
+                    <div>Raw Audio: <b style="color: #34D399;">Purged on Save</b></div>
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
         if staged_count > 0:
-            st.markdown("**Staged Samples Breakdown:**")
+            st.markdown(
+                '<div style="font-family: \'JetBrains Mono\', monospace; font-size: 0.75rem; font-weight: 700; color: #878E9F; text-transform: uppercase; margin-bottom: 0.4rem;">Staged Takes Breakdown:</div>',
+                unsafe_allow_html=True,
+            )
             for idx, take in enumerate(st.session_state.enrollment_takes):
                 st.markdown(
-                    f"""<div class="sample-pill">
-                        <b>#{idx + 1}</b> {take['name']} 
-                        <span style="color: #2dd4bf; margin-left: 4px;">({take['duration']:.2f}s)</span>
+                    f"""<div style="display: flex; align-items: center; justify-content: space-between; background: #0F1218; border: 1px solid #242936; border-radius: 8px; padding: 0.45rem 0.8rem; margin-bottom: 0.35rem; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;">
+                        <div>
+                            <span style="color: #F59E0B; font-weight: 700; margin-right: 6px;">#{idx + 1}</span>
+                            <span style="color: #F0F2F7;">{take['name']}</span>
+                        </div>
+                        <span style="color: #34D399; background: rgba(16, 185, 129, 0.12); padding: 0.15rem 0.45rem; border-radius: 4px; font-size: 0.75rem;">{take['duration']:.2f}s</span>
                     </div>""",
                     unsafe_allow_html=True,
                 )
-            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
 
         enroll_btn = st.button(
-            f"🚀 Enroll Profile '{enroll_id}' ({staged_count} Sample{'s' if staged_count != 1 else ''})",
+            f"⚡ Enroll Profile '{enroll_id}' ({staged_count} Sample{'s' if staged_count != 1 else ''})",
             type="primary",
             use_container_width=True,
             disabled=(staged_count == 0 or not volunteer_consent),
@@ -583,10 +710,22 @@ with tab_enroll:
 # TAB 2: Voice Verification (1:1)
 # =============================================================================
 with tab_verify:
-    st.markdown("### 🔍 Step 2: One-to-One (1:1) Voice Verification")
     st.markdown(
-        "Verify an incoming voice recording against an enrolled profile. "
-        "The system compares the candidate's embedding against the enrolled representation using cosine similarity."
+        """
+        <div style="margin-bottom: 1.4rem;">
+            <div style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.22rem 0.65rem; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 9999px; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 700; color: #F87171; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 0.5rem;">
+                <span style="width: 6px; height: 6px; border-radius: 50%; background: #EF4444; display: inline-block;"></span> 02 // 1:1 BIOMETRIC COMPARISON
+            </div>
+            <h2 style="font-size: 1.55rem; font-weight: 800; color: #FFFFFF; letter-spacing: -0.02em; margin: 0 0 0.4rem 0;">
+                Step 2: One-to-One (1:1) Voice Verification
+            </h2>
+            <div style="color: #878E9F; font-size: 0.88rem; line-height: 1.55; max-width: 920px;">
+                Verify an incoming voice recording against an enrolled profile. 
+                The system extracts an embedding via ECAPA-TDNN and compares it against the enrolled representation using cosine similarity.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     enrolled_profiles = storage.list_volunteers()
@@ -597,7 +736,15 @@ with tab_verify:
         v_col_left, v_col_right = st.columns([0.5, 0.5], gap="large")
 
         with v_col_left:
-            st.markdown("#### 1. Target Profile & Threshold")
+            st.markdown(
+                """
+                <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #242936; padding-bottom: 0.5rem; margin-bottom: 0.9rem;">
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; font-weight: 700; color: #878E9F; text-transform: uppercase; letter-spacing: 0.05em;">PANEL 2A // TARGET PROFILE & THRESHOLD</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 9999px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); color: #F87171;">● 192-DIM ECAPA</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
             profile_options = [p.demo_id for p in enrolled_profiles]
             selected_demo_id = st.selectbox("Select Enrolled Profile to Verify Against:", options=profile_options)
 
@@ -657,7 +804,15 @@ with tab_verify:
                 )
 
         with v_col_right:
-            st.markdown("#### 3. Verification Analysis & Verdict")
+            st.markdown(
+                """
+                <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #242936; padding-bottom: 0.5rem; margin-bottom: 0.9rem;">
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; font-weight: 700; color: #878E9F; text-transform: uppercase; letter-spacing: 0.05em;">PANEL 2B // VERIFICATION VERDICT</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 9999px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); color: #34D399;">● REALTIME SCORING</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
             if not volunteer_consent:
                 st.warning("⚠️ Informed consent must be checked to perform verification.")
@@ -761,10 +916,22 @@ with tab_verify:
 # TAB 3: Profile Governance & Disk Purging
 # =============================================================================
 with tab_governance:
-    st.markdown("### 🛡️ Enrolled Profiles & Data Governance")
     st.markdown(
-        "Review enrolled volunteer profiles stored in local repository storage (`data/volunteers`). "
-        "Under biometric data protection principles, volunteers have the right to permanently purge their templates at any time."
+        """
+        <div style="margin-bottom: 1.4rem;">
+            <div style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.22rem 0.65rem; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 9999px; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 700; color: #60A5FA; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 0.5rem;">
+                <span style="width: 6px; height: 6px; border-radius: 50%; background: #3B82F6; display: inline-block;"></span> 03 // PROFILE GOVERNANCE & PRIVACY
+            </div>
+            <h2 style="font-size: 1.55rem; font-weight: 800; color: #FFFFFF; letter-spacing: -0.02em; margin: 0 0 0.4rem 0;">
+                Profile Governance & Template Purging
+            </h2>
+            <div style="color: #878E9F; font-size: 0.88rem; line-height: 1.55; max-width: 920px;">
+                Review enrolled volunteer profiles stored in local repository storage (<code>data/volunteers</code>). 
+                Under biometric data protection principles, volunteers have the right to permanently purge their templates at any time.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     profiles = storage.list_volunteers()
@@ -843,10 +1010,22 @@ with tab_governance:
 # TAB 4: LibriSpeech Evaluation Mode
 # =============================================================================
 with tab_eval:
-    st.markdown("### 📊 LibriSpeech Verification Benchmark Harness")
     st.markdown(
-        "Evaluate empirical biometric error metrics (False Accept Rate, False Reject Rate, Accuracy) "
-        "over real audio recordings from an external directory (e.g., LibriSpeech `test-clean`)."
+        """
+        <div style="margin-bottom: 1.4rem;">
+            <div style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.22rem 0.65rem; background: rgba(234, 179, 8, 0.12); border: 1px solid rgba(234, 179, 8, 0.3); border-radius: 9999px; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 700; color: #FDE047; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 0.5rem;">
+                <span style="width: 6px; height: 6px; border-radius: 50%; background: #EAB308; display: inline-block;"></span> 04 // BENCHMARK & CALIBRATION
+            </div>
+            <h2 style="font-size: 1.55rem; font-weight: 800; color: #FFFFFF; letter-spacing: -0.02em; margin: 0 0 0.4rem 0;">
+                LibriSpeech Verification Benchmark Harness
+            </h2>
+            <div style="color: #878E9F; font-size: 0.88rem; line-height: 1.55; max-width: 920px;">
+                Evaluate empirical biometric error metrics (False Accept Rate, False Reject Rate, Accuracy) 
+                over real audio recordings from an external directory (e.g., LibriSpeech <code>test-clean</code>).
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     st.markdown(
@@ -867,6 +1046,15 @@ with tab_eval:
     has_valid_index = valid_index_path.is_file()
 
     with eval_col1:
+        st.markdown(
+            """
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #242936; padding-bottom: 0.5rem; margin-bottom: 0.9rem;">
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; font-weight: 700; color: #878E9F; text-transform: uppercase; letter-spacing: 0.05em;">PANEL 4A // DATASET PARTITIONS & TRIALS</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 9999px; background: rgba(234, 179, 8, 0.12); border: 1px solid rgba(234, 179, 8, 0.3); color: #FDE047;">● DISJOINT SPLIT</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         dataset_path_str = st.text_input(
             "External Dataset Directory Path (read in-place without copying):",
             value=default_corpus_path,
@@ -892,7 +1080,15 @@ with tab_eval:
         )
 
     with eval_col2:
-        st.markdown("#### Corpus Validation")
+        st.markdown(
+            """
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #242936; padding-bottom: 0.5rem; margin-bottom: 0.9rem;">
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; font-weight: 700; color: #878E9F; text-transform: uppercase; letter-spacing: 0.05em;">PANEL 4B // CORPUS VALIDATION & AUDIT</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 9999px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); color: #34D399;">● IN-SITU</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         adapter = LibriSpeechAdapter(
             dataset_path_str,
             valid_index_path=valid_index_path if use_validated_index and has_valid_index else None,

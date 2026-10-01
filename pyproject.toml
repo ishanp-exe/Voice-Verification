@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "customer-voice-authentication"
 version = "0.1.0"
-description = "Educational prototype for 1:1 voice verification in banking workflows"
+description = "VoxKey: Educational voice-verification prototype"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

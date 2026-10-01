@@ -1,10 +1,10 @@
 @echo off
 setlocal enabledelayedexpansion
 
-title Customer Voice Authentication Setup
+title VoxKey Setup
 
 echo ==============================================================================
-echo       CUSTOMER VOICE AUTHENTICATION - ENVIRONMENT SETUP
+echo                 VOXKEY - ENVIRONMENT SETUP
 echo ==============================================================================
 echo.
 
@@ -108,7 +108,7 @@ if %ERRORLEVEL% neq 0 (
 
 echo.
 echo ==============================================================================
-echo [SUCCESS] Customer Voice Authentication setup completed successfully!
+echo [SUCCESS] VoxKey setup completed successfully!
 echo ==============================================================================
 echo.
 echo You can now launch the app anytime by double-clicking:

@@ -12,10 +12,12 @@ __pycache__/
 
 # Local data, volunteer records & embeddings (Strictly private & local)
 data/
+data/volunteers/
 *.wav
 *.flac
 *.mp3
 *.ogg
+*.m4a
 *.pt
 *.npy
 
@@ -23,6 +25,12 @@ data/
 speechbrain_cache/
 pretrained_models/
 .cache/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
 
 # Streamlit local state
 .streamlit/

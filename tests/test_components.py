@@ -444,3 +444,38 @@ class TestMetricsCalculation:
         assert final_test_metric.false_accepts == 0
         assert final_test_metric.false_rejects == 0
         assert final_test_metric.accuracy == 1.0
+
+
+# ---------------------------------------------------------------------------
+# 6. Hero Carousel UI Component Tests
+# ---------------------------------------------------------------------------
+class TestHeroCarousel:
+    """Verifies that the dark-mode hero carousel meets all architectural and privacy constraints."""
+
+    def test_hero_carousel_html_content_and_structure(self):
+        from src.hero_carousel import get_hero_carousel_html
+
+        html = get_hero_carousel_html()
+        assert "<!DOCTYPE html>" in html
+        assert "Enroll a Voice" in html
+        assert "Verify a Speaker" in html
+        assert "Evaluate the Model" in html
+        assert "badge-gold" in html
+        assert "badge-red" in html
+        assert "badge-amber" in html
+        assert "wave-bar-gold" in html
+        assert "wave-bar-red" in html
+        assert "wave-bar-amber" in html
+        assert "prefers-reduced-motion: reduce" in html
+        assert "ArrowLeft" in html and "ArrowRight" in html
+        assert "touchstart" in html and "touchend" in html
+
+    def test_hero_carousel_zero_remote_dependencies_and_no_spline(self):
+        from src.hero_carousel import get_hero_carousel_html
+
+        html = get_hero_carousel_html()
+        # Ensure no Spline or remote image hosting services
+        assert "spline" not in html.lower()
+        assert "unsplash" not in html.lower()
+        assert "<img" not in html.lower()
+

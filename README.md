@@ -1,12 +1,12 @@
-# Customer Voice Authentication 
+# VoxKey
 
 ## 1. Project Overview & Objectives
 
-Customer Voice Authentication is an internship-level prototype demonstrating 1:1 biometric speaker verification in a simulated banking environment. It compares a candidate audio recording with an enrolled speaker profile to determine whether the two utterances may originate from the same speaker.
+VoxKey is an educational voice-verification prototype demonstrating 1:1 biometric speaker verification in a simulated banking environment. It compares a candidate audio recording with an enrolled speaker profile to determine whether the two utterances may originate from the same speaker.
 
 ### Key Objectives:
 - **Modular 1:1 Verification Engine**: Extract fixed-dimensional speaker embeddings using SpeechBrain's pretrained ECAPA-TDNN architecture and compare them via cosine similarity.
-- **Modern 21st.dev UI in Streamlit**: Polished, high-contrast, dark-mode analytics application built with Streamlit and styled with 21st.dev-inspired cards, hero spotlight, subtle scroll progress, and glassmorphic stats.
+- **Modern Dark Analytics UI in Streamlit**: Polished, high-contrast, dark-mode analytics application built with Streamlit and styled with modern cards, hero spotlight, subtle scroll progress, and glassmorphic stats.
 - **Native Browser Microphone Recording & Upload**: In-browser audio capture via Streamlit's native audio input (`st.audio_input`) and file upload (`st.file_uploader`) supporting `.wav`, `.flac`, `.mp3`, and `.ogg`.
 - **Multi-Sample Volunteer Enrollment**: Combine multiple takes via element-wise arithmetic mean and unit $L_2$-normalization into a single robust template without retaining raw audio.
 - **Volunteer Demo Mode**: Enable safe, consent-driven voice enrollment and verification with full local data privacy and instant data purging controls.
@@ -24,7 +24,7 @@ Voice-Verification/
 ├── pyproject.toml               # Modern build configuration and package metadata
 ├── start.bat                    # Windows 1-click launcher (starts Streamlit & opens browser)
 ├── start.ps1                    # PowerShell 1-click launcher
-├── app.py                       # Main Streamlit user interface (21st.dev styling & full workflow)
+├── app.py                       # Main Streamlit user interface (modern dark styling & full workflow)
 ├── README.md                    # Project documentation and run guide
 ├── docs/
 │   └── PROJECT_SYNOPSIS.md      # Formal internship project synopsis

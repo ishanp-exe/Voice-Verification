@@ -75,7 +75,7 @@ class TestHealthAndStatic:
         response = client.get("/")
         assert response.status_code == 200
         assert "text/html" in response.headers.get("content-type", "")
-        assert "Customer Voice Authentication" in response.text
+        assert "VoxKey" in response.text
 
 
 class TestVolunteerWorkflows:

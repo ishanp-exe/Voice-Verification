@@ -1,10 +1,10 @@
 @echo off
 setlocal enabledelayedexpansion
 
-title Customer Voice Authentication Server
+title VoxKey Server
 
 echo ==============================================================================
-echo        CUSTOMER VOICE AUTHENTICATION - EDUCATIONAL PROTOTYPE
+echo                 VOXKEY - EDUCATIONAL PROTOTYPE
 echo ==============================================================================
 echo.
 

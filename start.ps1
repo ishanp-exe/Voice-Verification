@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
-    Starts the Customer Voice Authentication FastAPI web application on Windows.
+    Starts the VoxKey Streamlit application on Windows.
 #>
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "==============================================================================" -ForegroundColor Cyan
-Write-Host "       CUSTOMER VOICE AUTHENTICATION - EDUCATIONAL PROTOTYPE" -ForegroundColor Cyan
+Write-Host "                 VOXKEY - EDUCATIONAL PROTOTYPE" -ForegroundColor Cyan
 Write-Host "==============================================================================" -ForegroundColor Cyan
 Write-Host ""
 
