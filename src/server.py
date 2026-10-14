@@ -16,7 +16,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.audio import AudioValidationError, load_and_validate_audio
 from src.dataset_eval import LibriSpeechAdapter, TrialPair
@@ -35,6 +35,10 @@ from src.verification import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Bound memory used while decoding client uploads.
+MAX_AUDIO_FILE_BYTES = 25 * 1024 * 1024
+MAX_ENROLLMENT_TOTAL_BYTES = 75 * 1024 * 1024
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -162,6 +166,10 @@ async def enroll_volunteer(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Demo Speaker ID must not be empty.",
         )
+    try:
+        storage._get_volunteer_dir(clean_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
 
     # Collect all uploaded files (handles both single 'file' and multi 'files')
     all_files: List[UploadFile] = []
@@ -180,10 +188,22 @@ async def enroll_volunteer(
     extracted_embeddings: List[torch.Tensor] = []
     total_duration_sec: float = 0.0
     original_sample_rate: int = 16000
+    total_upload_bytes = 0
 
     try:
         for idx, upload in enumerate(all_files):
-            content = await upload.read()
+            content = await upload.read(MAX_AUDIO_FILE_BYTES + 1)
+            if len(content) > MAX_AUDIO_FILE_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"Recording #{idx + 1} exceeds the 25 MiB per-file limit.",
+                )
+            total_upload_bytes += len(content)
+            if total_upload_bytes > MAX_ENROLLMENT_TOTAL_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="Combined enrollment uploads exceed the 75 MiB request limit.",
+                )
             if not content:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -228,6 +248,11 @@ async def enroll_volunteer(
         }
     except HTTPException:
         raise
+    except FileExistsError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A profile with ID '{clean_id}' already exists. Generate a new ID.",
+        ) from e
     except Exception as e:
         logger.exception("Enrollment failed for demo_id '%s'", clean_id)
         raise HTTPException(
@@ -239,7 +264,7 @@ async def enroll_volunteer(
 @app.post("/api/volunteers/verify")
 async def verify_volunteer(
     demo_id: str = Form(...),
-    threshold: float = Form(0.25),
+    threshold: float = Form(0.25, ge=-1.0, le=1.0),
     consent: str = Form(...),
     file: UploadFile = File(...),
 ) -> Dict[str, Any]:
@@ -254,7 +279,10 @@ async def verify_volunteer(
         )
 
     clean_id = demo_id.strip()
-    enrolled_emb = storage.load_embedding(clean_id)
+    try:
+        enrolled_emb = storage.load_embedding(clean_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
     if enrolled_emb is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -264,7 +292,12 @@ async def verify_volunteer(
     model = get_model()
 
     try:
-        content = await file.read()
+        content = await file.read(MAX_AUDIO_FILE_BYTES + 1)
+        if len(content) > MAX_AUDIO_FILE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Verification recording exceeds the 25 MiB file limit.",
+            )
         if not content:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -303,7 +336,10 @@ async def verify_volunteer(
 async def delete_volunteer(demo_id: str) -> Dict[str, Any]:
     """Permanently purges a volunteer profile and all local files from disk."""
     clean_id = demo_id.strip()
-    deleted = storage.delete_volunteer(clean_id)
+    try:
+        deleted = storage.delete_volunteer(clean_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -323,8 +359,8 @@ class DatasetPathRequest(BaseModel):
 
 class EvaluationRunRequest(BaseModel):
     path: str
-    num_genuine: int = 100
-    num_imposter: int = 100
+    num_genuine: int = Field(default=100, ge=1, le=5000)
+    num_imposter: int = Field(default=100, ge=1, le=5000)
     enable_split: bool = True
     seed: int = 42
 

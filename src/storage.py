@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import random
+import re
 import shutil
 import string
 from dataclasses import asdict, dataclass
@@ -63,13 +64,16 @@ class VolunteerStorage:
         return f"{prefix}-{suffix}"
 
     def _get_volunteer_dir(self, demo_id: str) -> Path:
-        # Sanitize demo_id to prevent directory traversal and accidental base_dir deletion
-        if not demo_id or not isinstance(demo_id, str):
-            raise ValueError(f"Invalid demo ID: '{demo_id}'. Demo ID must be a non-empty string.")
-        sanitized_id = "".join(c for c in demo_id.strip() if c.isalnum() or c in ("-", "_"))
-        if not sanitized_id:
-            raise ValueError(f"Invalid demo ID: '{demo_id}'. ID must contain alphanumeric characters.")
-        return self.base_dir / sanitized_id
+        # Accept only a simple identifier; silently stripping characters could
+        # make two different IDs resolve to the same on-disk profile.
+        if not isinstance(demo_id, str) or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", demo_id
+        ):
+            raise ValueError(
+                "Invalid demo ID. Use 1-64 letters, numbers, hyphens, or underscores, "
+                "starting with a letter or number."
+            )
+        return self.base_dir / demo_id
 
     def list_volunteers(self) -> List[VolunteerMetadata]:
         """Lists all currently enrolled volunteers."""
@@ -118,7 +122,8 @@ class VolunteerStorage:
             Saved VolunteerMetadata instance.
         """
         vol_dir = self._get_volunteer_dir(demo_id)
-        vol_dir.mkdir(parents=True, exist_ok=True)
+        # Never silently replace an existing biometric template.
+        vol_dir.mkdir(parents=True, exist_ok=False)
 
         # Save embedding tensor
         embedding_path = vol_dir / "embedding.pt"
