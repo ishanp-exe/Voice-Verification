@@ -264,7 +264,7 @@ async def enroll_volunteer(
 @app.post("/api/volunteers/verify")
 async def verify_volunteer(
     demo_id: str = Form(...),
-    threshold: float = Form(0.25, ge=-1.0, le=1.0),
+    threshold: float = Form(0.31, ge=-1.0, le=1.0),
     consent: str = Form(...),
     file: UploadFile = File(...),
 ) -> Dict[str, Any]:
@@ -324,6 +324,8 @@ async def verify_volunteer(
         }
     except AudioValidationError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Verification error for demo_id '%s'", clean_id)
         raise HTTPException(
@@ -467,7 +469,7 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
 
         cal_sweep = compute_metric_sweep(cal_eval, num_steps=60)
         cal_eer = find_empirical_eer(cal_sweep)
-        calibrated_threshold = cal_eer.threshold if cal_eer else 0.25
+        calibrated_threshold = cal_eer.threshold if cal_eer else 0.31
 
         # Measure performance strictly on held-out test partition at calibrated threshold
         test_metric = compute_metrics_at_threshold(test_eval, threshold=calibrated_threshold)
@@ -517,7 +519,7 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
 
         sweep = compute_metric_sweep(evaluated, num_steps=60)
         eer_metric = find_empirical_eer(sweep)
-        operating_threshold = eer_metric.threshold if eer_metric else 0.25
+        operating_threshold = eer_metric.threshold if eer_metric else 0.31
 
         gen_count = sum(1 for t in evaluated if t.is_genuine)
         imp_count = sum(1 for t in evaluated if not t.is_genuine)

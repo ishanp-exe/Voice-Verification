@@ -119,7 +119,8 @@ Alternatively, for PowerShell:
 Before benchmarking on external corpus audio, validate the dataset integrity without modifying, moving, or renaming any original files:
 
 ```powershell
-.\.venv\Scripts\python scripts/clean_validate_dataset.py --dataset-dir "C:\Users\ishan\Downloads\LibriSpeech\test-clean" --output-dir "data/evaluation"
+# Type the path to your local LibriSpeech test-clean folder
+.\.venv\Scripts\python scripts/clean_validate_dataset.py --dataset-dir "<path/to/LibriSpeech/test-clean>" --output-dir "data/evaluation"
 ```
 
 This script:

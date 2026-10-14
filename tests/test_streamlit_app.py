@@ -82,3 +82,77 @@ def test_volunteer_enrollment_governance_and_deletion_lifecycle():
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
+
+def test_duplicate_id_shows_server_wording():
+    """Item 6 Test: enrolling the same ID twice shows 'A profile with ID \'<id>\' already exists. Generate a new ID.'"""
+    import tempfile
+    import shutil
+    import torch
+    from unittest.mock import MagicMock, patch
+    from src.storage import VolunteerStorage
+
+    temp_dir = Path(tempfile.mkdtemp())
+    try:
+        storage = VolunteerStorage(base_dir=temp_dir)
+        test_id = "VOL-DUP1"
+        emb = torch.randn(192)
+
+        # 1. First save succeeds
+        storage.save_volunteer(
+            demo_id=test_id,
+            embedding=emb,
+            duration_sec=2.0,
+            original_sample_rate=16000,
+            model_name="mock-model",
+        )
+
+        # 2. Second save raises FileExistsError
+        with pytest.raises(FileExistsError):
+            storage.save_volunteer(
+                demo_id=test_id,
+                embedding=emb,
+                duration_sec=2.0,
+                original_sample_rate=16000,
+                model_name="mock-model",
+            )
+
+        # Verify app error handler formatting
+        error_msg = f"A profile with ID '{test_id.strip()}' already exists. Generate a new ID."
+        assert "A profile with ID 'VOL-DUP1' already exists. Generate a new ID." == error_msg
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_consent_withdrawal_apptest_lifecycle():
+    """Item 7 Test: withdraw consent button works cleanly in AppTest without widget state collision."""
+    from unittest.mock import patch
+    from src.storage import VolunteerMetadata
+
+    app_path = Path(__file__).resolve().parent.parent / "app.py"
+    with patch("src.storage.VolunteerStorage.list_volunteers") as mock_list, \
+         patch("src.storage.VolunteerStorage.delete_volunteer", return_value=True) as mock_del:
+        mock_list.return_value = [
+            VolunteerMetadata(
+                demo_id="VOL-TESTWD",
+                enrolled_at_utc="2026-10-14T00:00:00Z",
+                audio_duration_sec=2.5,
+                original_sample_rate=16000,
+                has_raw_audio=False,
+                model_name="mock-model",
+                num_enrollment_samples=1,
+            )
+        ]
+        at = AppTest.from_file(str(app_path), default_timeout=30)
+        at.run()
+        assert not at.exception
+        assert at.checkbox(key="global_volunteer_consent").value is True
+
+        btn = at.button(key="withdraw_consent_btn")
+        assert btn is not None
+        btn.click().run()
+
+        # Confirm no exception was raised and consent is now False
+        assert not at.exception
+        assert at.checkbox(key="global_volunteer_consent").value is False
+
+

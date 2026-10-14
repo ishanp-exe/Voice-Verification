@@ -199,6 +199,58 @@ class TestVolunteerWorkflows:
         data2 = response2.json()
         assert data2["is_match"] is False
 
+    def test_verify_error_status_codes_not_500(self, client, mock_model):
+        """Verifies that 400, 413, and 422 errors in verify endpoint are not masked as 500."""
+        wav_bytes = create_test_wav_bytes(1.5)
+        client.post(
+            "/api/volunteers/enroll",
+            data={"demo_id": "VOL-ERRS", "consent": "true"},
+            files={"file": ("enroll.wav", wav_bytes, "audio/wav")},
+        )
+
+        # 1. Empty upload returns 400
+        empty_res = client.post(
+            "/api/volunteers/verify",
+            data={"demo_id": "VOL-ERRS", "consent": "true"},
+            files={"file": ("empty.wav", b"", "audio/wav")},
+        )
+        assert empty_res.status_code == 400
+        assert "empty" in empty_res.json()["detail"].lower()
+
+        # 2. Oversized upload returns 413
+        oversized = b"0" * (25 * 1024 * 1024 + 10)
+        huge_res = client.post(
+            "/api/volunteers/verify",
+            data={"demo_id": "VOL-ERRS", "consent": "true"},
+            files={"file": ("huge.wav", oversized, "audio/wav")},
+        )
+        assert huge_res.status_code == 413
+        assert "exceeds" in huge_res.json()["detail"].lower()
+
+        # 3. Corrupt/unreadable audio returns 422
+        bad_res = client.post(
+            "/api/volunteers/verify",
+            data={"demo_id": "VOL-ERRS", "consent": "true"},
+            files={"file": ("corrupt.wav", b"NOT_A_VALID_WAV_HEADER", "audio/wav")},
+        )
+        assert bad_res.status_code == 422
+
+    def test_server_verify_default_threshold_is_0_31(self, client, mock_model):
+        """Verifies that the server verify endpoint default threshold is 0.31."""
+        wav_bytes = create_test_wav_bytes(1.5)
+        client.post(
+            "/api/volunteers/enroll",
+            data={"demo_id": "VOL-TH", "consent": "true"},
+            files={"file": ("enroll.wav", wav_bytes, "audio/wav")},
+        )
+        res = client.post(
+            "/api/volunteers/verify",
+            data={"demo_id": "VOL-TH", "consent": "true"},
+            files={"file": ("cand.wav", wav_bytes, "audio/wav")},
+        )
+        assert res.status_code == 200
+        assert res.json()["threshold"] == 0.31
+
     def test_delete_profile(self, client):
         wav_bytes = create_test_wav_bytes(1.5)
         client.post(

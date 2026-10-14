@@ -329,7 +329,7 @@ def main():
     parser.add_argument(
         "--dataset-dir",
         type=str,
-        default=r"C:\Users\ishan\Downloads\LibriSpeech\test-clean",
+        default="",
         help="Path to LibriSpeech test-clean directory.",
     )
     parser.add_argument(
