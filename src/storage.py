@@ -92,7 +92,7 @@ class VolunteerStorage:
                             data["num_enrollment_samples"] = 1
                         volunteers.append(VolunteerMetadata(**data))
                     except Exception as e:
-                        logger.warning("Failed to load metadata for %s: %e", folder.name, e)
+                        logger.warning("Failed to load metadata for %s: %s", folder.name, e)
         return volunteers
 
     def save_volunteer(
@@ -125,32 +125,36 @@ class VolunteerStorage:
         # Never silently replace an existing biometric template.
         vol_dir.mkdir(parents=True, exist_ok=False)
 
-        # Save embedding tensor
-        embedding_path = vol_dir / "embedding.pt"
-        torch.save(embedding.detach().cpu(), embedding_path)
+        try:
+            # Save embedding tensor
+            embedding_path = vol_dir / "embedding.pt"
+            torch.save(embedding.detach().cpu(), embedding_path)
 
-        has_raw = False
-        if save_raw_audio and raw_audio_bytes:
-            audio_path = vol_dir / "enrollment_sample.wav"
-            with open(audio_path, "wb") as f:
-                f.write(raw_audio_bytes)
-            has_raw = True
+            has_raw = False
+            if save_raw_audio and raw_audio_bytes:
+                audio_path = vol_dir / "enrollment_sample.wav"
+                with open(audio_path, "wb") as f:
+                    f.write(raw_audio_bytes)
+                has_raw = True
 
-        metadata = VolunteerMetadata(
-            demo_id=demo_id,
-            enrolled_at_utc=datetime.now(timezone.utc).isoformat(),
-            audio_duration_sec=duration_sec,
-            original_sample_rate=original_sample_rate,
-            has_raw_audio=has_raw,
-            model_name=model_name,
-            num_enrollment_samples=max(1, num_enrollment_samples),
-        )
+            metadata = VolunteerMetadata(
+                demo_id=demo_id,
+                enrolled_at_utc=datetime.now(timezone.utc).isoformat(),
+                audio_duration_sec=duration_sec,
+                original_sample_rate=original_sample_rate,
+                has_raw_audio=has_raw,
+                model_name=model_name,
+                num_enrollment_samples=max(1, num_enrollment_samples),
+            )
 
-        meta_path = vol_dir / "metadata.json"
-        with open(meta_path, "w", encoding="utf-8") as f:
-            json.dump(asdict(metadata), f, indent=2)
+            meta_path = vol_dir / "metadata.json"
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump(asdict(metadata), f, indent=2)
 
-        return metadata
+            return metadata
+        except Exception:
+            shutil.rmtree(vol_dir, ignore_errors=True)
+            raise
 
     def load_embedding(self, demo_id: str) -> Optional[torch.Tensor]:
         """Loads the stored embedding tensor for a given volunteer ID."""
@@ -158,7 +162,7 @@ class VolunteerStorage:
         embedding_path = vol_dir / "embedding.pt"
         if not embedding_path.exists():
             return None
-        return torch.load(embedding_path)
+        return torch.load(embedding_path, weights_only=True)
 
     def load_metadata(self, demo_id: str) -> Optional[VolunteerMetadata]:
         """Loads stored metadata for a given volunteer ID."""

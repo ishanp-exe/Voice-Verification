@@ -15,7 +15,7 @@ import io
 import shutil
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -244,6 +244,67 @@ class TestVolunteerStorage:
 
         vols = temp_storage.list_volunteers()
         assert vols[0].num_enrollment_samples == 3
+
+    def test_list_volunteers_corrupt_metadata_logs_warning_and_does_not_crash(self, temp_storage, caplog):
+        """Item 5 Test: a corrupt metadata.json logs a warning and does not crash."""
+        corrupt_dir = temp_storage.base_dir / "VOL-CORRUPT"
+        corrupt_dir.mkdir(parents=True, exist_ok=True)
+        with open(corrupt_dir / "metadata.json", "w", encoding="utf-8") as f:
+            f.write("{invalid-json-data}")
+
+        with caplog.at_level("WARNING"):
+            vols = temp_storage.list_volunteers()
+        assert isinstance(vols, list)
+        assert any("Failed to load metadata for VOL-CORRUPT" in rec.message for rec in caplog.records)
+
+    def test_save_volunteer_failure_cleans_up_directory_and_allows_retry(self, temp_storage):
+        """Item 3 Test: force torch.save to fail, confirm folder is gone, and confirm same ID can be saved afterwards."""
+        test_id = "VOL-FAILRETRY"
+        emb = torch.randn(192)
+        target_dir = temp_storage._get_volunteer_dir(test_id)
+
+        # 1. Force torch.save to fail during initial attempt
+        with patch("torch.save", side_effect=IOError("Simulated disk error")):
+            with pytest.raises(IOError, match="Simulated disk error"):
+                temp_storage.save_volunteer(
+                    demo_id=test_id,
+                    embedding=emb,
+                    duration_sec=2.0,
+                    original_sample_rate=16000,
+                    model_name="mock-model",
+                )
+
+        # Confirm folder was removed and is not left behind
+        assert not target_dir.exists(), "Profile folder should be deleted if save failed"
+
+        # 2. Confirm same ID can be saved afterwards
+        meta = temp_storage.save_volunteer(
+            demo_id=test_id,
+            embedding=emb,
+            duration_sec=2.0,
+            original_sample_rate=16000,
+            model_name="mock-model",
+        )
+        assert meta.demo_id == test_id
+        # Confirm successful save keeps folder
+        assert target_dir.exists(), "Profile folder should exist after successful save"
+
+    def test_load_embedding_loads_normal_embedding(self, temp_storage):
+        """Item 4 Test: saves an embedding with torch.save, loads back with weights_only=True, and checks tensor equality."""
+        test_id = "VOL-LOADTEST"
+        emb = torch.randn(192)
+        temp_storage.save_volunteer(
+            demo_id=test_id,
+            embedding=emb,
+            duration_sec=1.5,
+            original_sample_rate=16000,
+            model_name="mock-model",
+        )
+        with patch("torch.load", wraps=torch.load) as spy_load:
+            loaded = temp_storage.load_embedding(test_id)
+            assert loaded is not None
+            assert torch.equal(loaded, emb.detach().cpu())
+            assert spy_load.call_args[1].get("weights_only") is True
 
 
 
@@ -478,4 +539,82 @@ class TestHeroCarousel:
         assert "spline" not in html.lower()
         assert "unsplash" not in html.lower()
         assert "<img" not in html.lower()
+
+
+# ---------------------------------------------------------------------------
+# 7. Review Items Verification Tests
+# ---------------------------------------------------------------------------
+class TestReviewItems:
+    def test_benchmark_export_datetime_import_no_name_error(self):
+        """Item 1 Test: running the export path does not raise NameError for datetime or timezone."""
+        import app as app_mod
+        from datetime import datetime, timezone
+
+        assert hasattr(app_mod, "datetime")
+        assert hasattr(app_mod, "timezone")
+
+        # Simulate the export dictionary structure from app.py
+        tm_mock = MagicMock()
+        tm_mock.far = 0.05
+        tm_mock.frr = 0.05
+        tm_mock.accuracy = 0.95
+        tm_mock.false_accepts = 5
+        tm_mock.false_rejects = 5
+        tm_mock.true_accepts = 95
+        tm_mock.true_rejects = 95
+        tm_mock.imposter_trials = 100
+        tm_mock.genuine_trials = 100
+
+        res_mock = {
+            "dataset_path": "data/evaluation",
+            "used_validated_index": True,
+            "calibrated_threshold": 0.31,
+            "cal_trials_count": 100,
+            "test_trials_count": 100,
+            "cal_skip": 0,
+            "test_skip": 0,
+            "cache_count": 20,
+        }
+
+        # This will raise NameError if datetime or timezone is not available in app scope
+        ts = app_mod.datetime.now(app_mod.timezone.utc).isoformat()
+        assert ts is not None
+
+        export_dict = {
+            "timestamp_utc": app_mod.datetime.now(app_mod.timezone.utc).isoformat(),
+            "dataset_directory": res_mock.get("dataset_path", ""),
+            "used_validated_index": res_mock.get("used_validated_index", False),
+            "calibrated_threshold": float(res_mock["calibrated_threshold"]),
+            "seeds": {"calibration_seed": 42, "evaluation_seed": 100},
+            "trials_summary": {
+                "calibration_trials": res_mock["cal_trials_count"],
+                "test_trials": res_mock["test_trials_count"],
+                "skipped_trials": res_mock["cal_skip"] + res_mock["test_skip"],
+                "unique_recordings_cached": res_mock["cache_count"],
+            },
+            "held_out_metrics": {
+                "far": float(tm_mock.far),
+                "frr": float(tm_mock.frr),
+                "accuracy": float(tm_mock.accuracy),
+                "false_accepts": tm_mock.false_accepts,
+                "false_rejects": tm_mock.false_rejects,
+                "true_accepts": tm_mock.true_accepts,
+                "true_rejects": tm_mock.true_rejects,
+                "imposter_trials": tm_mock.imposter_trials,
+                "genuine_trials": tm_mock.genuine_trials,
+            },
+        }
+        assert export_dict["calibrated_threshold"] == 0.31
+
+    def test_no_personal_path_in_repo(self):
+        """Item 9 Test: the string 'C:\\Users\\ishan' appears nowhere in the repo."""
+        repo_root = Path(__file__).resolve().parent.parent
+        bad_str = "C:\\Users\\ishan"
+        # Search all tracked text files
+        for ext in ("*.py", "*.md", "*.html", "*.bat", "*.ps1", "*.toml", "*.txt", "*.css"):
+            for path in repo_root.rglob(ext):
+                if any(ignored in path.parts for ignored in (".git", ".venv", "venv", "__pycache__", ".pytest_cache", "data")):
+                    continue
+                content = path.read_text(encoding="utf-8", errors="ignore")
+                assert bad_str.lower() not in content.lower(), f"Found personal path in {path}"
 

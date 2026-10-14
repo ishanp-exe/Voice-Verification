@@ -15,6 +15,7 @@ import io
 import math
 import random
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -436,6 +437,13 @@ render_hero_carousel(height=265)
 # -----------------------------------------------------------------------------
 # Global Volunteer Consent Gate
 # -----------------------------------------------------------------------------
+if "global_volunteer_consent" not in st.session_state:
+    st.session_state.global_volunteer_consent = True
+
+if st.session_state.get("withdraw_consent_pending"):
+    st.session_state.global_volunteer_consent = False
+    del st.session_state["withdraw_consent_pending"]
+
 consent_container = st.container()
 with consent_container:
     st.markdown("#### 📋 Volunteer Informed Consent Gate")
@@ -443,7 +451,6 @@ with consent_container:
     with consent_col1:
         volunteer_consent = st.checkbox(
             "I freely consent to having my voice audio recorded and processed locally to extract a 192-dimensional mathematical speaker embedding. I understand that raw audio is discarded immediately and only the numerical template is retained.",
-            value=True,
             key="global_volunteer_consent",
         )
     with consent_col2:
@@ -702,6 +709,8 @@ with tab_enroll:
                     )
                     time.sleep(1.2)
                     st.rerun()
+                except FileExistsError:
+                    st.error(f"A profile with ID '{enroll_id.strip()}' already exists. Generate a new ID.")
                 except Exception as e:
                     st.error(f"Enrollment failed: {e}")
 
@@ -981,7 +990,7 @@ with tab_governance:
             if st.button("🚫 Withdraw & Purge", type="primary", use_container_width=True, key="withdraw_consent_btn"):
                 purged = storage.delete_volunteer(withdraw_target)
                 if purged:
-                    st.session_state.global_volunteer_consent = False
+                    st.session_state.withdraw_consent_pending = True
                     st.success(f"Consent withdrawn. Profile `{withdraw_target}` and all associated vector data permanently purged.")
                     time.sleep(1.0)
                     st.rerun()
@@ -1041,7 +1050,7 @@ with tab_eval:
 
     eval_col1, eval_col2 = st.columns([0.6, 0.4], gap="large")
 
-    default_corpus_path = r"C:\Users\ishan\Downloads\LibriSpeech\test-clean"
+    default_corpus_path = ""
     valid_index_path = Path("data/evaluation/valid_audio_index.csv")
     has_valid_index = valid_index_path.is_file()
 
@@ -1058,6 +1067,8 @@ with tab_eval:
         dataset_path_str = st.text_input(
             "External Dataset Directory Path (read in-place without copying):",
             value=default_corpus_path,
+            placeholder="Type folder path to LibriSpeech dataset (e.g., path/to/LibriSpeech/test-clean)",
+            help="Type the folder path where the external dataset is located on your system.",
         )
 
         c_val1, c_val2 = st.columns(2)
@@ -1192,7 +1203,7 @@ with tab_eval:
         # Sweep calibration set for threshold
         sweep = compute_metric_sweep(cal_eval, num_steps=100)
         eer_res = find_empirical_eer(sweep)
-        calibrated_threshold = eer_res.threshold if eer_res else 0.25
+        calibrated_threshold = eer_res.threshold if eer_res else 0.31
 
         # Evaluate held-out test partition at calibrated threshold
         test_metric = compute_metrics_at_threshold(test_eval, threshold=calibrated_threshold)
