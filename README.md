@@ -20,7 +20,7 @@ VoxKey is an educational voice-verification prototype demonstrating 1:1 biometri
 ```text
 Voice-Verification/
 ├── .gitignore                   # Strict exclusion of data, recordings, embeddings, caches, venv
-├── requirements.txt             # Dependencies (PyTorch, Torchaudio, SpeechBrain, Streamlit, FastAPI)
+├── requirements.txt             # Dependencies (PyTorch, Torchaudio, SpeechBrain, Streamlit, optional FastAPI)
 ├── pyproject.toml               # Modern build configuration and package metadata
 ├── start.bat                    # Windows 1-click launcher (starts Streamlit & opens browser)
 ├── start.ps1                    # PowerShell 1-click launcher
@@ -49,72 +49,138 @@ Voice-Verification/
 
 ---
 
-## 3. Quick Start on Windows
+## 3. Setup & Installation
 
-### 1. Initial Environment Setup (First time only)
+> [!IMPORTANT]
+> **First-Run Notice & Biometric Privacy**:
+> - **Pretrained Model Download**: On the very first run, VoxKey automatically downloads SpeechBrain's pretrained ECAPA-TDNN model (`speechbrain/spkrec-ecapa-voxceleb`) from Hugging Face Hub. This requires an active internet connection and may take several minutes depending on network bandwidth.
+> - **Local Model Cache**: Downloaded weights and hyperparameters are cached locally inside the repository directory at `speechbrain_cache/spkrec-ecapa-voxceleb/`. All subsequent runs reuse this downloaded copy and operate completely offline.
+> - **Strictly Local Processing**: All voice audio recordings, extracted 192-dimensional embeddings, and volunteer profiles remain on your local computer. No audio or biometric data is ever transmitted to the cloud.
+
+### Prerequisites
+- **Python Version**: Python 3.10 is recommended (Python >= 3.10 supported) for reliable prebuilt PyTorch and SpeechBrain wheel compatibility.
+- **Git**: Installed and available in your system path.
+- **System Audio Dependencies (Linux / macOS)**:
+  VoxKey uses `soundfile` (`src/audio.py`) to read and decode audio files (`.wav`, `.flac`, `.mp3`, and `.ogg`). While Windows and macOS wheels bundle standard libraries, some minimal Linux systems may need `libsndfile`; `ffmpeg` is not required (the code only uses `soundfile`):
+  - **Ubuntu / Debian**:
+    ```bash
+    sudo apt-get update && sudo apt-get install -y libsndfile1
+    ```
+  - **Fedora / RHEL**:
+    ```bash
+    sudo dnf install libsndfile
+    ```
+  - **macOS (Homebrew, if needed)**:
+    ```bash
+    brew install libsndfile
+    ```
+
+---
+
+### Quick Start on Windows
+
+#### 1. Initial Environment Setup (First time only)
 Double-click `setup.bat` in the project root (or run `.\setup.bat` in PowerShell). This script:
 - Verifies Python 3.10 is installed on the system.
 - Checks and creates `.venv` (preserving any existing environment without destructive deletion).
 - Automatically installs and upgrades dependencies from `requirements.txt` and `pyproject.toml`.
 
-### 2. Launch the Application
+#### 2. Verify your setup
+Run the environment verification script to validate that your Python version, virtual environment, and dependencies are ready:
+```powershell
+.\.venv\Scripts\python scripts/check_setup.py
+```
+This uses the project's `.venv` Python, so activating the venv first is not needed.
+
+#### 3. Launch the Application
 Double-click `start.bat` in the project root, or execute from PowerShell:
 ```powershell
 .\start.bat
 ```
-This launcher:
-1. Validates the `.venv` Python virtual environment.
-2. Automatically launches your default web browser to `http://127.0.0.1:8501`.
-3. Runs the local Streamlit application.
-
 Alternatively, for PowerShell:
 ```powershell
 .\start.ps1
 ```
 
----
-
-## 4. Manual Installation & Setup Instructions
-
-### Prerequisites
-- Python 3.10 (Recommended for prebuilt PyTorch and SpeechBrain wheel compatibility)
-- Git
-
-### Step-by-Step Setup
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/ishanp-exe/Voice-Verification.git
-   cd Voice-Verification
-   ```
-
-2. **Create and activate a virtual environment**:
-   - **Windows (PowerShell)**:
-     ```powershell
-     py -3.10 -m venv .venv
-     .\.venv\Scripts\Activate.ps1
-     ```
-   - **Linux / macOS**:
-     ```bash
-     python3.10 -m venv .venv
-     source .venv/bin/activate
-     ```
-
-3. **Install dependencies & project package**:
-   ```powershell
-   pip install --upgrade pip
-   pip install -r requirements.txt
-   pip install -e .
-   ```
-
-4. **Start the application manually**:
-   ```powershell
-   .\.venv\Scripts\streamlit run app.py --server.address 127.0.0.1 --server.port 8501
-   ```
-   Open your browser to `http://127.0.0.1:8501`.
+This launcher:
+1. Validates the `.venv` Python virtual environment.
+2. Automatically launches your default web browser to `http://127.0.0.1:8501`.
+3. Runs the local Streamlit application.
 
 ---
 
-## 5. LibriSpeech Dataset Cleaning & Validation
+### Setup on macOS / Linux
+
+Follow these steps to set up and run VoxKey on macOS or Linux:
+
+#### 1. Clone the repository
+```bash
+git clone https://github.com/ishanp-exe/Voice-Verification.git
+cd Voice-Verification
+```
+
+#### 2. Create and activate a virtual environment
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+*(Ensure `python3` points to Python 3.10 or newer. On systems with multiple Python versions, specify `python3.10 -m venv .venv`).*
+
+#### 3. Install dependencies
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install -e .
+```
+
+#### 4. Verify your setup
+Run the environment verification script to validate that your Python version, virtual environment, required dependencies, and directory permissions are ready:
+```bash
+python scripts/check_setup.py
+```
+*(This script runs using only the Python standard library and does NOT download the speaker model. All checks should report `[PASS]`).*
+
+#### 5. Launch the Streamlit application
+Start the Streamlit application using the same host and port configuration as the Windows launcher:
+```bash
+streamlit run app.py --server.address 127.0.0.1 --server.port 8501
+```
+Open your web browser and navigate to `http://127.0.0.1:8501`.
+
+#### 6. (Optional) Launch the FastAPI backend
+If you wish to run the standalone REST API backend (`src/server.py`):
+```bash
+uvicorn src.server:app --host 127.0.0.1 --port 8000
+```
+Interactive API documentation will be available at `http://127.0.0.1:8000/docs`.
+
+#### 7. Run automated tests
+Run the full test suite in your virtual environment:
+```bash
+pytest -v
+```
+
+---
+
+### Command Quick Reference
+
+The table below maps each Windows setup and execution command to its macOS / Linux counterpart:
+
+| Task / Action | Windows (PowerShell / CMD) | macOS / Linux (Bash / Zsh) |
+| :--- | :--- | :--- |
+| **Create venv** | `py -3.10 -m venv .venv` | `python3 -m venv .venv` |
+| **Activate venv** | `.\.venv\Scripts\Activate.ps1` (or `Activate.bat`) | `source .venv/bin/activate` |
+| **Install requirements** | `pip install -r requirements.txt` | `pip install -r requirements.txt` |
+| **Install package (editable)** | `pip install -e .` | `pip install -e .` |
+| **Verify setup** | `.\.venv\Scripts\python scripts/check_setup.py` | `python scripts/check_setup.py` |
+| **Start Streamlit app** | `.\start.bat` or `.\start.ps1` | `streamlit run app.py --server.address 127.0.0.1 --server.port 8501` |
+| **Start FastAPI server (optional)** | `uvicorn src.server:app --host 127.0.0.1 --port 8000` | `uvicorn src.server:app --host 127.0.0.1 --port 8000` |
+| **Run tests** | `pytest -v` or `.\.venv\Scripts\pytest -v` | `pytest -v` |
+| **Validate LibriSpeech** | `python scripts/clean_validate_dataset.py ...` | `python scripts/clean_validate_dataset.py ...` |
+
+---
+
+## 4. LibriSpeech Dataset Cleaning & Validation
 
 Before benchmarking on external corpus audio, validate the dataset integrity without modifying, moving, or renaming any original files:
 
@@ -135,7 +201,7 @@ This script:
 
 ---
 
-## 6. Usage Guide
+## 5. Usage Guide
 
 ### Mode 1: Volunteer Demo Mode
 1. **Informed Consent Gate**: Check the volunteer consent box. Without consent, recording and enrollment are blocked.
@@ -160,22 +226,22 @@ This script:
 
 ---
 
-## 7. Privacy & Data Handling Practices
+## 6. Privacy & Data Handling Practices
 - **Strictly Local Processing**: Audio files and embeddings remain on the local machine. No data is transmitted to cloud services or external APIs.
-- **Tightened Local API Access**: The FastAPI application is bound strictly to `127.0.0.1` and CORS is restricted to local application origins (`http://127.0.0.1:8000`, `http://localhost:8000`).
+- **Tightened Local API Access**: The optional FastAPI backend application is bound strictly to `127.0.0.1` and CORS is restricted to local application origins (`http://127.0.0.1:8000`, `http://localhost:8000`).
 - **Minimal Retention**: By default, raw audio is discarded immediately following embedding extraction. Only mathematical embedding vectors and non-PII metadata (`metadata.json`) are stored.
 - **Git Safety**: The `data/` directory, model cache, audio files, and virtual environments are explicitly excluded via `.gitignore` to prevent accidental commits of biometric data.
 - **Instant Deletion**: Volunteers have full control to permanently remove their enrolled templates at any time.
 
 ---
 
-## 8. Understanding Scores & Thresholds
+## 7. Understanding Scores & Thresholds
 - **Cosine Similarity is NOT a Probability**: Cosine similarity measures geometric alignment in $[-1.0, 1.0]$. A score of `0.65` does not represent a "65% chance of being the same person."
 - **Configurable Decision Threshold**: Different security postures require different operating points. High thresholds minimize False Accepts (imposter breach), while low thresholds minimize False Rejects (customer friction). No threshold should be considered "typical" without empirical calibration on target channel audio.
 
 ---
 
-## 9. Limitations & Scope Boundaries
+## 8. Limitations & Scope Boundaries
 - **Prototype Status**: Designed exclusively for internship-level education and research.
 - **No Anti-Spoofing / Presentation Attack Detection (PAD)**: Vulnerable to replays, text-to-speech synthesis, and deepfakes.
 - **No 1:N Identification**: Evaluates one-to-one identity claims only.
@@ -184,7 +250,7 @@ This script:
 
 ---
 
-## 10. Running Automated Tests
+## 9. Running Automated Tests
 
 To run the automated unit and API test suite from the repository root in PowerShell:
 ```powershell
