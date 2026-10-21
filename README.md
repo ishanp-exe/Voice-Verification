@@ -29,7 +29,8 @@ Voice-Verification/
 ├── docs/
 │   └── PROJECT_SYNOPSIS.md      # Formal internship project synopsis
 ├── scripts/
-│   └── clean_validate_dataset.py # Repeatable LibriSpeech validation & cleaning audit tool
+│   ├── clean_validate_dataset.py # Repeatable LibriSpeech validation & cleaning audit tool
+│   └── run_dataset_eda.py       # Exploratory data analysis & distribution chart generator
 ├── data/
 │   └── evaluation/              # Generated audit logs (audio_file_validation.csv, valid_audio_index.csv)
 ├── src/
@@ -198,6 +199,19 @@ This script:
   - `audio_file_validation.csv`: Comprehensive log of all audio files with status and rejection reasons.
   - `valid_audio_index.csv`: Curated index of files that passed all checks.
   - `dataset_cleaning_summary.txt`: Human-readable summary of files checked, valid/rejected counts, and speaker distributions.
+
+### Dataset EDA (optional)
+
+Once the validated index (`data/evaluation/valid_audio_index.csv`) is generated, you can run the exploratory data analysis script to compute dataset duration percentiles, speaker distribution tables, and summary charts in `data/evaluation/eda/`:
+
+- **Windows (PowerShell)**:
+  ```powershell
+  .\.venv\Scripts\python scripts/run_dataset_eda.py
+  ```
+- **macOS / Linux**:
+  ```bash
+  python scripts/run_dataset_eda.py
+  ```
 
 ---
 
