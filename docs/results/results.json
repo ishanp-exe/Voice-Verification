@@ -1,0 +1,40 @@
+{
+  "calibrated_threshold": 0.3118,
+  "calibration_eer": 0.014,
+  "test_at_calibrated_threshold": {
+    "threshold": 0.3118,
+    "total_trials": 1000,
+    "genuine_trials": 500,
+    "imposter_trials": 500,
+    "false_accepts": 6,
+    "false_rejects": 17,
+    "true_accepts": 483,
+    "true_rejects": 494,
+    "far": 0.012,
+    "frr": 0.034,
+    "accuracy": 0.977
+  },
+  "test_eer_reference_only": 0.025,
+  "generated_utc": "2026-10-21T14:55:24+00:00",
+  "dataset": "LibriSpeech test-clean",
+  "used_validated_index": true,
+  "model": "speechbrain/spkrec-ecapa-voxceleb",
+  "split_reliable": true,
+  "split_note": "Successfully partitioned 40 speakers into 20 calibration speakers (20 multi-sample) and 20 evaluation speakers (20 multi-sample).",
+  "calibration_speakers": 20,
+  "test_speakers": 20,
+  "seeds": {
+    "split": 42,
+    "calibration_trials": 42,
+    "test_trials": 100
+  },
+  "requested_trials_per_partition": {
+    "genuine": 500,
+    "imposter": 500
+  },
+  "calibration_trials_scored": 1000,
+  "test_trials_scored": 1000,
+  "skipped_trials": [],
+  "unique_recordings_embedded": 2013,
+  "elapsed_sec": 425.7
+}
