@@ -1,5 +1,7 @@
 # VoxKey
 
+[![tests](https://github.com/ishanp-exe/Voice-Verification/actions/workflows/tests.yml/badge.svg)](https://github.com/ishanp-exe/Voice-Verification/actions/workflows/tests.yml)
+
 ## 1. Project Overview & Objectives
 
 VoxKey is an educational voice-verification prototype demonstrating 1:1 biometric speaker verification in a simulated banking environment. It compares a candidate audio recording with an enrolled speaker profile to determine whether the two utterances may originate from the same speaker.
@@ -27,9 +29,11 @@ Voice-Verification/
 ├── app.py                       # Main Streamlit user interface (modern dark styling & full workflow)
 ├── README.md                    # Project documentation and run guide
 ├── docs/
-│   └── PROJECT_SYNOPSIS.md      # Formal internship project synopsis
+│   ├── PROJECT_SYNOPSIS.md      # Formal internship project synopsis
+│   └── results/                 # Benchmark outputs (results.json, trials.csv, charts)
 ├── scripts/
 │   ├── clean_validate_dataset.py # Repeatable LibriSpeech validation & cleaning audit tool
+│   ├── run_benchmark.py         # Headless calibration/test benchmark → docs/results/
 │   └── run_dataset_eda.py       # Exploratory data analysis & distribution chart generator
 ├── data/
 │   └── evaluation/              # Generated audit logs (audio_file_validation.csv, valid_audio_index.csv)
@@ -45,6 +49,7 @@ Voice-Verification/
 └── tests/
     ├── test_streamlit_app.py    # Streamlit AppTest integration test for app.py
     ├── test_api.py              # Backend REST endpoint tests using TestClient
+    ├── test_benchmark.py        # Benchmark calibration, artifact, and privacy tests
     └── test_components.py       # Core audio, verification, storage, and metrics unit tests
 ```
 
@@ -215,7 +220,38 @@ Once the validated index (`data/evaluation/valid_audio_index.csv`) is generated,
 
 ---
 
-## 5. Usage Guide
+## 5. Benchmark Results (LibriSpeech test-clean)
+
+Measured with `scripts/run_benchmark.py` on the validated index (2,620 recordings, 40 speakers). Speakers are split into two disjoint halves: the threshold is chosen on the 20 **calibration** speakers only, then applied unchanged to the 20 held-out **test** speakers.
+
+| Metric | Value |
+| :--- | :--- |
+| Calibrated threshold τ_cal (EER point on calibration speakers) | **0.3118** |
+| Calibration EER | 1.40% |
+| Test FAR at τ_cal | **1.20%** (6 / 500 imposter trials) |
+| Test FRR at τ_cal | **3.40%** (17 / 500 genuine trials) |
+| Test accuracy at τ_cal | **97.70%** |
+| Test EER (reference only, not used to set τ) | 2.50% |
+| Trials | 1,000 calibration + 1,000 test, 0 skipped |
+| Seeds | split 42, calibration trials 42, test trials 100 |
+
+<p>
+  <img src="docs/results/score_distribution.png" alt="Genuine vs imposter score distributions on the test speakers" width="560">
+  <img src="docs/results/det_curve.png" alt="DET curve on the test speakers" width="340">
+</p>
+
+The app's default threshold of 0.31 comes from this calibration. Full outputs are in [`docs/results/`](docs/results/): `results.json` (summary) and `trials.csv` (every scored trial).
+
+> **Read these numbers carefully**: LibriSpeech is clean, read audiobook speech recorded at 16 kHz. Error rates on telephone, noisy, or spoofed audio will be higher, and 20 test speakers is a small sample.
+
+Reproduce (about 7 minutes on CPU; the model must already be downloaded):
+```bash
+python scripts/run_benchmark.py --dataset-dir "<path/to/LibriSpeech/test-clean>"
+```
+
+---
+
+## 6. Usage Guide
 
 ### Mode 1: Volunteer Demo Mode
 1. **Informed Consent Gate**: Check the volunteer consent box. Without consent, recording and enrollment are blocked.
@@ -240,7 +276,7 @@ Once the validated index (`data/evaluation/valid_audio_index.csv`) is generated,
 
 ---
 
-## 6. Privacy & Data Handling Practices
+## 7. Privacy & Data Handling Practices
 - **Strictly Local Processing**: Audio files and embeddings remain on the local machine. No data is transmitted to cloud services or external APIs.
 - **Tightened Local API Access**: The optional FastAPI backend application is bound strictly to `127.0.0.1` and CORS is restricted to local application origins (`http://127.0.0.1:8000`, `http://localhost:8000`).
 - **Minimal Retention**: By default, raw audio is discarded immediately following embedding extraction. Only mathematical embedding vectors and non-PII metadata (`metadata.json`) are stored.
@@ -249,13 +285,13 @@ Once the validated index (`data/evaluation/valid_audio_index.csv`) is generated,
 
 ---
 
-## 7. Understanding Scores & Thresholds
+## 8. Understanding Scores & Thresholds
 - **Cosine Similarity is NOT a Probability**: Cosine similarity measures geometric alignment in $[-1.0, 1.0]$. A score of `0.65` does not represent a "65% chance of being the same person."
 - **Configurable Decision Threshold**: Different security postures require different operating points. High thresholds minimize False Accepts (imposter breach), while low thresholds minimize False Rejects (customer friction). No threshold should be considered "typical" without empirical calibration on target channel audio.
 
 ---
 
-## 8. Limitations & Scope Boundaries
+## 9. Limitations & Scope Boundaries
 - **Prototype Status**: Designed exclusively for internship-level education and research.
 - **No Anti-Spoofing / Presentation Attack Detection (PAD)**: Vulnerable to replays, text-to-speech synthesis, and deepfakes.
 - **No 1:N Identification**: Evaluates one-to-one identity claims only.
@@ -264,7 +300,7 @@ Once the validated index (`data/evaluation/valid_audio_index.csv`) is generated,
 
 ---
 
-## 9. Running Automated Tests
+## 10. Running Automated Tests
 
 To run the automated unit and API test suite from the repository root in PowerShell:
 ```powershell
