@@ -29,7 +29,8 @@ Voice-Verification/
 ├── docs/
 │   └── PROJECT_SYNOPSIS.md      # Formal internship project synopsis
 ├── scripts/
-│   └── clean_validate_dataset.py # Repeatable LibriSpeech validation & cleaning audit tool
+│   ├── clean_validate_dataset.py # Repeatable LibriSpeech validation & cleaning audit tool
+│   └── run_dataset_eda.py       # Exploratory data analysis & distribution chart generator
 ├── data/
 │   └── evaluation/              # Generated audit logs (audio_file_validation.csv, valid_audio_index.csv)
 ├── src/
@@ -199,6 +200,19 @@ This script:
   - `valid_audio_index.csv`: Curated index of files that passed all checks.
   - `dataset_cleaning_summary.txt`: Human-readable summary of files checked, valid/rejected counts, and speaker distributions.
 
+### Dataset EDA (optional)
+
+Once the validated index (`data/evaluation/valid_audio_index.csv`) is generated, you can run the exploratory data analysis script to compute dataset duration percentiles, speaker distribution tables, and summary charts in `data/evaluation/eda/`:
+
+- **Windows (PowerShell)**:
+  ```powershell
+  .\.venv\Scripts\python scripts/run_dataset_eda.py
+  ```
+- **macOS / Linux**:
+  ```bash
+  python scripts/run_dataset_eda.py
+  ```
+
 ---
 
 ## 5. Usage Guide
@@ -206,7 +220,7 @@ This script:
 ### Mode 1: Volunteer Demo Mode
 1. **Informed Consent Gate**: Check the volunteer consent box. Without consent, recording and enrollment are blocked.
 2. **Multi-Sample Enrollment**:
-   - Record multiple separate takes via microphone or file upload ($\ge 0.8$s each).
+   - Record multiple separate takes via microphone or file upload ($\ge 1.0$s each).
    - Staged samples are combined via arithmetic mean and unit $L_2$-normalization into a single robust template vector. Raw audio is discarded immediately.
 3. **1:1 Verification**:
    - Select the enrolled Demo ID from the dropdown.

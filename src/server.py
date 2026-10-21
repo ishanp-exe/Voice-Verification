@@ -169,7 +169,7 @@ async def enroll_volunteer(
     try:
         storage._get_volunteer_dir(clean_id)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)) from e
 
     # Collect all uploaded files (handles both single 'file' and multi 'files')
     all_files: List[UploadFile] = []
@@ -195,13 +195,13 @@ async def enroll_volunteer(
             content = await upload.read(MAX_AUDIO_FILE_BYTES + 1)
             if len(content) > MAX_AUDIO_FILE_BYTES:
                 raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                     detail=f"Recording #{idx + 1} exceeds the 25 MiB per-file limit.",
                 )
             total_upload_bytes += len(content)
             if total_upload_bytes > MAX_ENROLLMENT_TOTAL_BYTES:
                 raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                     detail="Combined enrollment uploads exceed the 75 MiB request limit.",
                 )
             if not content:
@@ -216,7 +216,7 @@ async def enroll_volunteer(
                 audio = load_and_validate_audio(audio_stream, min_duration_sec=0.8)
             except AudioValidationError as e:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=f"Recording #{idx + 1} ({upload.filename or 'sample'}) validation failed: {e}",
                 ) from e
 
@@ -282,7 +282,7 @@ async def verify_volunteer(
     try:
         enrolled_emb = storage.load_embedding(clean_id)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)) from e
     if enrolled_emb is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -295,7 +295,7 @@ async def verify_volunteer(
         content = await file.read(MAX_AUDIO_FILE_BYTES + 1)
         if len(content) > MAX_AUDIO_FILE_BYTES:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail="Verification recording exceeds the 25 MiB file limit.",
             )
         if not content:
@@ -323,7 +323,7 @@ async def verify_volunteer(
             "explanation": result.explanation,
         }
     except AudioValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)) from e
     except HTTPException:
         raise
     except Exception as e:
@@ -341,7 +341,7 @@ async def delete_volunteer(demo_id: str) -> Dict[str, Any]:
     try:
         deleted = storage.delete_volunteer(clean_id)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)) from e
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
