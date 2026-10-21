@@ -206,7 +206,7 @@ This script:
 ### Mode 1: Volunteer Demo Mode
 1. **Informed Consent Gate**: Check the volunteer consent box. Without consent, recording and enrollment are blocked.
 2. **Multi-Sample Enrollment**:
-   - Record multiple separate takes via microphone or file upload ($\ge 0.8$s each).
+   - Record multiple separate takes via microphone or file upload ($\ge 1.0$s each).
    - Staged samples are combined via arithmetic mean and unit $L_2$-normalization into a single robust template vector. Raw audio is discarded immediately.
 3. **1:1 Verification**:
    - Select the enrolled Demo ID from the dropdown.
