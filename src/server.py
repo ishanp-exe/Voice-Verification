@@ -12,6 +12,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import torch
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -39,6 +40,9 @@ logger = logging.getLogger(__name__)
 # Bound memory used while decoding client uploads.
 MAX_AUDIO_FILE_BYTES = 25 * 1024 * 1024
 MAX_ENROLLMENT_TOTAL_BYTES = 75 * 1024 * 1024
+
+# Allowed audio MIME types for upload
+ALLOWED_MIME_TYPES = {"audio/wav", "audio/mpeg", "audio/flac", "audio/ogg"}
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -192,6 +196,11 @@ async def enroll_volunteer(
 
     try:
         for idx, upload in enumerate(all_files):
+            if upload.content_type and upload.content_type not in ALLOWED_MIME_TYPES:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Recording #{idx + 1} has unsupported format '{upload.content_type}'. Supported: WAV, MP3, FLAC, OGG.",
+                )
             content = await upload.read(MAX_AUDIO_FILE_BYTES + 1)
             if len(content) > MAX_AUDIO_FILE_BYTES:
                 raise HTTPException(
@@ -237,6 +246,14 @@ async def enroll_volunteer(
             model_name=model.model_name,
             num_enrollment_samples=len(extracted_embeddings),
             save_raw_audio=False,
+        )
+
+        logger.info(
+            "Volunteer enrollment completed: demo_id=%s, consent=%s, num_samples=%d, duration_sec=%.2f",
+            clean_id,
+            "confirmed",
+            len(extracted_embeddings),
+            total_duration_sec,
         )
 
         return {
@@ -292,6 +309,11 @@ async def verify_volunteer(
     model = get_model()
 
     try:
+        if file.content_type and file.content_type not in ALLOWED_MIME_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Verification audio has unsupported format '{file.content_type}'. Supported: WAV, MP3, FLAC, OGG.",
+            )
         content = await file.read(MAX_AUDIO_FILE_BYTES + 1)
         if len(content) > MAX_AUDIO_FILE_BYTES:
             raise HTTPException(
@@ -347,6 +369,7 @@ async def delete_volunteer(demo_id: str) -> Dict[str, Any]:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Profile '{clean_id}' not found or could not be deleted.",
         )
+    logger.warning("Volunteer profile deleted: demo_id=%s", clean_id)
     return {"success": True, "demo_id": clean_id, "message": "Profile permanently purged."}
 
 

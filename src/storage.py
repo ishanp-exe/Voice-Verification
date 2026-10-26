@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import json
 import logging
-import random
 import re
+import secrets
 import shutil
 import string
 from dataclasses import asdict, dataclass
@@ -59,8 +59,8 @@ class VolunteerStorage:
 
     @staticmethod
     def generate_demo_id(prefix: str = "VOL") -> str:
-        """Generates a random, non-identifying demo ID (e.g. VOL-7392)."""
-        suffix = "".join(random.choices(string.digits, k=4))
+        """Generates a cryptographically random, non-identifying demo ID (e.g. VOL-7392)."""
+        suffix = "".join(secrets.choice(string.digits) for _ in range(4))
         return f"{prefix}-{suffix}"
 
     def _get_volunteer_dir(self, demo_id: str) -> Path:
