@@ -13,11 +13,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import torch
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from src.audio import AudioValidationError, load_and_validate_audio
 from src.dataset_eval import LibriSpeechAdapter, TrialPair
@@ -50,6 +52,10 @@ app = FastAPI(
     description="Educational voice-verification prototype using SpeechBrain ECAPA-TDNN.",
     version="1.0.0",
 )
+
+# Rate limiter to prevent DoS attacks
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
 
 # Tightened CORS: strictly restricted to local web application origins
 app.add_middleware(
@@ -144,7 +150,9 @@ async def list_volunteers() -> Dict[str, Any]:
 
 
 @app.post("/api/volunteers/enroll")
+@limiter.limit("50/minute")
 async def enroll_volunteer(
+    request: Request,
     demo_id: str = Form(...),
     consent: str = Form(...),
     files: Optional[List[UploadFile]] = File(None),
@@ -279,7 +287,9 @@ async def enroll_volunteer(
 
 
 @app.post("/api/volunteers/verify")
+@limiter.limit("100/minute")
 async def verify_volunteer(
+    request: Request,
     demo_id: str = Form(...),
     threshold: float = Form(0.31, ge=-1.0, le=1.0),
     consent: str = Form(...),

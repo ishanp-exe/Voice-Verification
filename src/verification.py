@@ -84,11 +84,19 @@ def verify_speakers(
     Args:
         enrolled_embedding: Baseline enrolled embedding representation.
         candidate_embedding: New verification candidate embedding representation.
-        threshold: Configurable decision boundary.
+        threshold: Configurable decision boundary (must be in range [-1.0, 1.0]).
 
     Returns:
         VerificationResult with similarity score, decision, and explanation.
+
+    Raises:
+        ValueError: If threshold is outside valid range [-1.0, 1.0].
     """
+    if not (-1.0 <= threshold <= 1.0):
+        raise ValueError(
+            f"Threshold must be in range [-1.0, 1.0], got {threshold}"
+        )
+
     similarity = compute_cosine_similarity(enrolled_embedding, candidate_embedding)
     is_match = similarity >= threshold
 
