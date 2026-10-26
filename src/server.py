@@ -39,9 +39,12 @@ from src.verification import (
 
 logger = logging.getLogger(__name__)
 
-# Bound memory used while decoding client uploads.
+# Configuration constants
 MAX_AUDIO_FILE_BYTES = 25 * 1024 * 1024
 MAX_ENROLLMENT_TOTAL_BYTES = 75 * 1024 * 1024
+DEFAULT_VERIFICATION_THRESHOLD = 0.31
+DEFAULT_MIN_AUDIO_DURATION_SEC = 0.8
+DEFAULT_MIN_EVAL_AUDIO_DURATION_SEC = 0.5
 
 # Allowed audio MIME types for upload
 ALLOWED_MIME_TYPES = {"audio/wav", "audio/mpeg", "audio/flac", "audio/ogg"}
@@ -230,7 +233,7 @@ async def enroll_volunteer(
             # Validate and convert audio to 16 kHz mono float32
             audio_stream = io.BytesIO(content)
             try:
-                audio = load_and_validate_audio(audio_stream, min_duration_sec=0.8)
+                audio = load_and_validate_audio(audio_stream, min_duration_sec=DEFAULT_MIN_AUDIO_DURATION_SEC)
             except AudioValidationError as e:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -291,7 +294,7 @@ async def enroll_volunteer(
 async def verify_volunteer(
     request: Request,
     demo_id: str = Form(...),
-    threshold: float = Form(0.31, ge=-1.0, le=1.0),
+    threshold: float = Form(DEFAULT_VERIFICATION_THRESHOLD, ge=-1.0, le=1.0),
     consent: str = Form(...),
     file: UploadFile = File(...),
 ) -> Dict[str, Any]:
@@ -337,7 +340,7 @@ async def verify_volunteer(
             )
 
         audio_stream = io.BytesIO(content)
-        audio = load_and_validate_audio(audio_stream, min_duration_sec=0.8)
+        audio = load_and_validate_audio(audio_stream, min_duration_sec=DEFAULT_MIN_AUDIO_DURATION_SEC)
 
         candidate_emb = model.extract_embedding(audio.waveform)
         result = verify_speakers(
@@ -438,7 +441,7 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
         canonical_key = str(path.resolve())
         if canonical_key in embedding_cache:
             return embedding_cache[canonical_key]
-        audio = load_and_validate_audio(path, min_duration_sec=0.5)
+        audio = load_and_validate_audio(path, min_duration_sec=DEFAULT_MIN_EVAL_AUDIO_DURATION_SEC)
         emb = model.extract_embedding(audio.waveform)
         embedding_cache[canonical_key] = emb
         return emb
@@ -502,7 +505,7 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
 
         cal_sweep = compute_metric_sweep(cal_eval, num_steps=60)
         cal_eer = find_empirical_eer(cal_sweep)
-        calibrated_threshold = cal_eer.threshold if cal_eer else 0.31
+        calibrated_threshold = cal_eer.threshold if cal_eer else DEFAULT_VERIFICATION_THRESHOLD
 
         # Measure performance strictly on held-out test partition at calibrated threshold
         test_metric = compute_metrics_at_threshold(test_eval, threshold=calibrated_threshold)
@@ -552,7 +555,7 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
 
         sweep = compute_metric_sweep(evaluated, num_steps=60)
         eer_metric = find_empirical_eer(sweep)
-        operating_threshold = eer_metric.threshold if eer_metric else 0.31
+        operating_threshold = eer_metric.threshold if eer_metric else DEFAULT_VERIFICATION_THRESHOLD
 
         gen_count = sum(1 for t in evaluated if t.is_genuine)
         imp_count = sum(1 for t in evaluated if not t.is_genuine)
