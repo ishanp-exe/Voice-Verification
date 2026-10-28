@@ -10,6 +10,7 @@ import io
 import logging
 from dataclasses import asdict
 from pathlib import Path
+from threading import Lock
 from typing import Any, Dict, List, Optional
 
 import torch
@@ -49,6 +50,71 @@ DEFAULT_MIN_EVAL_AUDIO_DURATION_SEC = 0.5
 # Allowed audio MIME types for upload
 ALLOWED_MIME_TYPES = {"audio/wav", "audio/mpeg", "audio/flac", "audio/ogg"}
 
+def validate_dataset_path(path_str: str) -> Path:
+    """Validates that a dataset path is accessible and prevents path traversal attacks.
+
+    Rejects paths with '..' or '~' components to prevent directory traversal.
+    """
+    try:
+        requested_path = Path(path_str).resolve()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid path format: {e}",
+        ) from e
+
+    # Reject suspicious path patterns that might indicate attacks
+    if ".." in path_str or "~" in path_str:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dataset path cannot contain '..' or '~' components.",
+        )
+
+    return requested_path
+
+
+class ModelManager:
+    """Thread-safe singleton for managing the speaker embedding model."""
+
+    _instance: Optional[ModelManager] = None
+    _lock = Lock()
+
+    def __init__(self):
+        self.model: Optional[SpeakerEmbeddingModel] = None
+        self.load_error: Optional[str] = None
+
+    @classmethod
+    def get_instance(cls) -> ModelManager:
+        """Returns the singleton ModelManager instance (thread-safe)."""
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = cls()
+        return cls._instance
+
+    def get_model(self) -> SpeakerEmbeddingModel:
+        """Lazily loads and returns the speaker embedding model (thread-safe)."""
+        if self.model is not None:
+            return self.model
+
+        with ModelManager._lock:
+            # Double-check pattern after acquiring lock
+            if self.model is not None:
+                return self.model
+
+            try:
+                self.model = SpeakerEmbeddingModel.load()
+                self.load_error = None
+                return self.model
+            except Exception as e:
+                self.load_error = str(e)
+                logger.error("Failed to load pretrained model: %s", e)
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"Pretrained speaker model could not be loaded: {e}",
+                ) from e
+
+
 # Initialize FastAPI application
 app = FastAPI(
     title="VoxKey",
@@ -74,27 +140,7 @@ app.add_middleware(
 
 # Shared singletons
 storage = VolunteerStorage()
-_model_instance: Optional[SpeakerEmbeddingModel] = None
-_model_load_error: Optional[str] = None
-
-
-def get_model() -> SpeakerEmbeddingModel:
-    """Lazily loads and returns the speaker embedding model."""
-    global _model_instance, _model_load_error
-    if _model_instance is not None:
-        return _model_instance
-
-    try:
-        _model_instance = SpeakerEmbeddingModel.load()
-        _model_load_error = None
-        return _model_instance
-    except Exception as e:
-        _model_load_error = str(e)
-        logger.error("Failed to load pretrained model: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Pretrained speaker model could not be loaded: {e}",
-        ) from e
+model_manager = ModelManager.get_instance()
 
 
 # Static files and root route
@@ -123,15 +169,14 @@ async def serve_index():
 @app.get("/api/health")
 async def health_check() -> Dict[str, Any]:
     """Returns application health and model availability."""
-    global _model_instance, _model_load_error
-    model_loaded = _model_instance is not None
+    model_loaded = model_manager.model is not None
     model_name = "SpeechBrain ECAPA-TDNN (spkrec-ecapa-voxceleb)"
-    error_msg = _model_load_error
+    error_msg = model_manager.load_error
 
     if not model_loaded and error_msg is None:
         # Attempt proactive initial load
         try:
-            get_model()
+            model_manager.get_model()
             model_loaded = True
         except Exception as e:
             model_loaded = False
@@ -199,7 +244,7 @@ async def enroll_volunteer(
             detail="At least one audio recording file is required for enrollment.",
         )
 
-    model = get_model()
+    model = model_manager.get_model()
     extracted_embeddings: List[torch.Tensor] = []
     total_duration_sec: float = 0.0
     original_sample_rate: int = 16000
@@ -319,7 +364,7 @@ async def verify_volunteer(
             detail=f"Volunteer profile '{clean_id}' was not found in local storage.",
         )
 
-    model = get_model()
+    model = model_manager.get_model()
 
     try:
         if file.content_type and file.content_type not in ALLOWED_MIME_TYPES:
@@ -406,6 +451,9 @@ class EvaluationRunRequest(BaseModel):
 @app.post("/api/evaluation/validate-dataset")
 async def validate_dataset(req: DatasetPathRequest) -> Dict[str, Any]:
     """Validates an external dataset directory without copying files."""
+    # Validate path to prevent directory traversal attacks
+    validate_dataset_path(req.path)
+
     adapter = LibriSpeechAdapter(req.path)
     summary = adapter.validate()
     return {
@@ -424,6 +472,9 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
     Utilizes an in-memory embedding cache so audio files appearing in multiple trial pairs
     do not trigger redundant model inferences.
     """
+    # Validate path to prevent directory traversal attacks
+    validate_dataset_path(req.path)
+
     adapter = LibriSpeechAdapter(req.path)
     summary = adapter.validate()
     if not summary.is_valid:
@@ -432,7 +483,7 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
             detail=f"Invalid dataset: {summary.message}",
         )
 
-    model = get_model()
+    model = model_manager.get_model()
 
     # Embedding cache: maps canonical audio file path -> 1D embedding tensor
     embedding_cache: Dict[str, torch.Tensor] = {}

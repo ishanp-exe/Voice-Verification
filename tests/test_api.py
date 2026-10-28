@@ -53,7 +53,7 @@ def mock_model():
     vec = vec / torch.norm(vec, p=2)
     mock.extract_embedding.return_value = vec
 
-    with patch.object(server_module, "get_model", return_value=mock):
+    with patch.object(server_module.model_manager, "get_model", return_value=mock):
         yield mock
 
 

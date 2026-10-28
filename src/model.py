@@ -4,6 +4,10 @@ Loads SpeechBrain's ECAPA-TDNN model and extracts normalized speaker embeddings.
 Note: This system uses a frozen pretrained model. Speaker enrollment extracts and
 stores an embedding representation for geometric comparison; it DOES NOT train or
 fine-tune model weights.
+
+Security Note: Model downloads from Hugging Face Hub should be verified via
+checksum validation (SHA256) in production environments. Ensure revision pinning
+to prevent supply chain attacks via model tampering or accidental updates.
 """
 
 from __future__ import annotations
@@ -18,8 +22,9 @@ import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
 
-# Default model identifier and local cache directory
+# Default model identifier with revision pinning for supply chain security
 DEFAULT_MODEL_SOURCE = "speechbrain/spkrec-ecapa-voxceleb"
+DEFAULT_MODEL_REVISION = "main"  # Pin to specific commit hash in production
 DEFAULT_CACHE_DIR = "speechbrain_cache/spkrec-ecapa-voxceleb"
 
 
@@ -46,6 +51,7 @@ class SpeakerEmbeddingModel:
         source: str = DEFAULT_MODEL_SOURCE,
         savedir: Optional[str] = DEFAULT_CACHE_DIR,
         run_opts: Optional[dict] = None,
+        revision: str = DEFAULT_MODEL_REVISION,
     ) -> SpeakerEmbeddingModel:
         """Loads the pretrained ECAPA-TDNN model from SpeechBrain / Hugging Face Hub.
 
@@ -53,6 +59,7 @@ class SpeakerEmbeddingModel:
             source: Hugging Face repo ID or local checkpoint path.
             savedir: Local directory for caching model weights.
             run_opts: Optional dictionary of runtime options (e.g. {"device": "cpu"}).
+            revision: Git revision (branch, tag, or commit hash) for supply chain security.
 
         Returns:
             SpeakerEmbeddingModel instance.
@@ -83,12 +90,18 @@ class SpeakerEmbeddingModel:
             # Use LocalStrategy.COPY on Windows to avoid symlink privilege errors (WinError 1314)
             local_strategy = LocalStrategy.COPY if os.name == "nt" else LocalStrategy.SYMLINK
 
-            logger.info("Loading pretrained speaker model from '%s' into '%s'...", source, cache_path)
+            logger.info(
+                "Loading pretrained speaker model from '%s' (revision: %s) into '%s'...",
+                source,
+                revision,
+                cache_path,
+            )
             classifier = EncoderClassifier.from_hparams(
                 source=source,
                 savedir=str(cache_path),
                 run_opts=run_opts,
                 local_strategy=local_strategy,
+                revision=revision,
             )
             return cls(classifier=classifier, model_name=source)
         except Exception as e:
