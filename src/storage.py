@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import secrets
 import shutil
@@ -24,6 +25,70 @@ from typing import Dict, List, Optional, Tuple
 import torch
 
 logger = logging.getLogger(__name__)
+
+# Embedding encryption key management (production: use environment variable)
+_EMBEDDING_ENCRYPTION_KEY: Optional[bytes] = None
+
+
+def _get_encryption_key() -> Optional[bytes]:
+    """Returns the embedding encryption key if encryption is enabled.
+
+    For production use, provide the key via EMBEDDING_ENCRYPTION_KEY environment variable.
+    Key must be a 32-byte hex string (256-bit key).
+    """
+    global _EMBEDDING_ENCRYPTION_KEY
+
+    if _EMBEDDING_ENCRYPTION_KEY is None:
+        key_env = os.getenv("EMBEDDING_ENCRYPTION_KEY")
+        if key_env:
+            try:
+                # Parse hex string to bytes
+                _EMBEDDING_ENCRYPTION_KEY = bytes.fromhex(key_env)
+                if len(_EMBEDDING_ENCRYPTION_KEY) != 32:
+                    logger.warning(
+                        "EMBEDDING_ENCRYPTION_KEY must be 32 bytes (64 hex chars), got %d bytes",
+                        len(_EMBEDDING_ENCRYPTION_KEY),
+                    )
+                    _EMBEDDING_ENCRYPTION_KEY = None
+            except ValueError as e:
+                logger.warning("Failed to parse EMBEDDING_ENCRYPTION_KEY: %s", e)
+                _EMBEDDING_ENCRYPTION_KEY = None
+
+    return _EMBEDDING_ENCRYPTION_KEY
+
+
+def _encrypt_embedding(embedding_bytes: bytes, key: bytes) -> bytes:
+    """Encrypts embedding bytes using AES-256-GCM."""
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        # Generate random nonce (96 bits for GCM)
+        nonce = os.urandom(12)
+        cipher = AESGCM(key)
+        ciphertext = cipher.encrypt(nonce, embedding_bytes, None)
+        # Return nonce + ciphertext (nonce must be available for decryption)
+        return nonce + ciphertext
+    except ImportError:
+        logger.warning(
+            "cryptography library not available. Embeddings will be stored unencrypted. "
+            "Install cryptography for production: pip install cryptography>=41.0.0"
+        )
+        return embedding_bytes
+
+
+def _decrypt_embedding(encrypted_bytes: bytes, key: bytes) -> bytes:
+    """Decrypts embedding bytes using AES-256-GCM."""
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        nonce = encrypted_bytes[:12]
+        ciphertext = encrypted_bytes[12:]
+        cipher = AESGCM(key)
+        plaintext = cipher.decrypt(nonce, ciphertext, None)
+        return plaintext
+    except ImportError:
+        logger.warning("cryptography library not available. Treating bytes as plaintext.")
+        return encrypted_bytes
 
 DEFAULT_STORAGE_DIR = Path("data/volunteers")
 
@@ -126,9 +191,24 @@ class VolunteerStorage:
         vol_dir.mkdir(parents=True, exist_ok=False)
 
         try:
-            # Save embedding tensor
+            # Save embedding tensor (with optional encryption)
             embedding_path = vol_dir / "embedding.pt"
-            torch.save(embedding.detach().cpu(), embedding_path)
+            embedding_cpu = embedding.detach().cpu()
+
+            # Serialize embedding to bytes
+            import io
+            buffer = io.BytesIO()
+            torch.save(embedding_cpu, buffer)
+            embedding_bytes = buffer.getvalue()
+
+            # Apply encryption if key is available
+            enc_key = _get_encryption_key()
+            if enc_key:
+                embedding_bytes = _encrypt_embedding(embedding_bytes, enc_key)
+
+            # Save to disk
+            with open(embedding_path, "wb") as f:
+                f.write(embedding_bytes)
 
             has_raw = False
             if save_raw_audio and raw_audio_bytes:
@@ -157,12 +237,29 @@ class VolunteerStorage:
             raise
 
     def load_embedding(self, demo_id: str) -> Optional[torch.Tensor]:
-        """Loads the stored embedding tensor for a given volunteer ID."""
+        """Loads the stored embedding tensor for a given volunteer ID (handles decryption if needed)."""
         vol_dir = self._get_volunteer_dir(demo_id)
         embedding_path = vol_dir / "embedding.pt"
         if not embedding_path.exists():
             return None
-        return torch.load(embedding_path, weights_only=True)
+
+        # Read embedding bytes from disk
+        with open(embedding_path, "rb") as f:
+            embedding_bytes = f.read()
+
+        # Decrypt if encryption key is available
+        enc_key = _get_encryption_key()
+        if enc_key and len(embedding_bytes) > 12:  # GCM format: nonce (12) + ciphertext
+            try:
+                embedding_bytes = _decrypt_embedding(embedding_bytes, enc_key)
+            except Exception as e:
+                logger.warning("Failed to decrypt embedding for %s: %s", demo_id, e)
+                # Fall back to treating as plaintext
+
+        # Deserialize embedding tensor
+        import io
+        buffer = io.BytesIO(embedding_bytes)
+        return torch.load(buffer, weights_only=True)
 
     def load_metadata(self, demo_id: str) -> Optional[VolunteerMetadata]:
         """Loads stored metadata for a given volunteer ID."""

@@ -54,15 +54,26 @@ def load_and_validate_audio(
         AudioValidationError: If audio cannot be decoded, is empty, or is too short.
     """
     # Wrap bytes or binary streams
+    MAX_AUDIO_FILE_BYTES = 25 * 1024 * 1024  # 25 MB limit for audio streams
+
     if isinstance(audio_source, bytes):
         if len(audio_source) == 0:
             raise AudioValidationError("Audio file is completely empty (0 bytes).")
+        if len(audio_source) > MAX_AUDIO_FILE_BYTES:
+            raise AudioValidationError(
+                f"Audio file exceeds maximum size of {MAX_AUDIO_FILE_BYTES / 1024 / 1024:.0f} MB."
+            )
         stream = io.BytesIO(audio_source)
     elif hasattr(audio_source, "read"):
         # File-like object (e.g. FastAPI UploadFile or BytesIO)
-        data = audio_source.read()
+        # Read with size limit to prevent unbounded memory consumption
+        data = audio_source.read(MAX_AUDIO_FILE_BYTES + 1)
         if len(data) == 0:
             raise AudioValidationError("Audio file is completely empty (0 bytes).")
+        if len(data) > MAX_AUDIO_FILE_BYTES:
+            raise AudioValidationError(
+                f"Audio file exceeds maximum size of {MAX_AUDIO_FILE_BYTES / 1024 / 1024:.0f} MB."
+            )
         stream = io.BytesIO(data)
     else:
         path = Path(audio_source)
