@@ -20,6 +20,7 @@ import string
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from typing import Dict, List, Optional, Tuple
 
 import torch
@@ -118,6 +119,9 @@ class VolunteerMetadata:
 class VolunteerStorage:
     """Manages local storage, retrieval, and complete deletion of volunteer profiles."""
 
+    # Class-level lock to prevent race conditions on concurrent enrollments
+    _write_lock = Lock()
+
     def __init__(self, base_dir: Path = DEFAULT_STORAGE_DIR):
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
@@ -185,10 +189,20 @@ class VolunteerStorage:
 
         Returns:
             Saved VolunteerMetadata instance.
+
+        Raises:
+            FileExistsError: If volunteer profile already exists (prevents accidental overwrites).
         """
         vol_dir = self._get_volunteer_dir(demo_id)
-        # Never silently replace an existing biometric template.
-        vol_dir.mkdir(parents=True, exist_ok=False)
+
+        # Acquire lock to prevent race conditions on concurrent enrollments with same ID
+        with VolunteerStorage._write_lock:
+            # Check again after acquiring lock (double-check pattern)
+            if vol_dir.exists():
+                raise FileExistsError(f"Volunteer profile '{demo_id}' already exists.")
+
+            # Never silently replace an existing biometric template.
+            vol_dir.mkdir(parents=True, exist_ok=False)
 
         try:
             # Save embedding tensor (with optional encryption)
@@ -276,12 +290,17 @@ class VolunteerStorage:
     def delete_volunteer(self, demo_id: str) -> bool:
         """Permanently deletes all data and directories for a volunteer.
 
+        Acquires write lock to prevent race conditions with concurrent operations.
+
         Returns:
             True if profile existed and was deleted; False otherwise.
         """
         vol_dir = self._get_volunteer_dir(demo_id)
-        if vol_dir.exists() and vol_dir.is_dir():
-            shutil.rmtree(vol_dir)
-            logger.info("Permanently removed profile directory for volunteer %s", demo_id)
-            return True
+
+        with VolunteerStorage._write_lock:
+            if vol_dir.exists() and vol_dir.is_dir():
+                shutil.rmtree(vol_dir)
+                logger.info("Permanently removed profile directory for volunteer %s", demo_id)
+                return True
+
         return False

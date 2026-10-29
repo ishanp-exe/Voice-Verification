@@ -286,7 +286,14 @@ async def enroll_volunteer(
                 ) from e
 
             # Extract 192-dimensional unit-norm embedding
-            embedding = model.extract_embedding(audio.waveform)
+            try:
+                embedding = model.extract_embedding(audio.waveform)
+            except Exception as e:
+                logger.exception("Model inference failed for recording %d", idx + 1)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Model inference failed for recording #{idx + 1}. Please try again.",
+                ) from e
             extracted_embeddings.append(embedding)
             total_duration_sec += audio.duration_sec
             original_sample_rate = audio.sample_rate
@@ -387,7 +394,14 @@ async def verify_volunteer(
         audio_stream = io.BytesIO(content)
         audio = load_and_validate_audio(audio_stream, min_duration_sec=DEFAULT_MIN_AUDIO_DURATION_SEC)
 
-        candidate_emb = model.extract_embedding(audio.waveform)
+        try:
+            candidate_emb = model.extract_embedding(audio.waveform)
+        except Exception as e:
+            logger.exception("Model inference failed for verification audio")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Model inference failed. Please try again.",
+            ) from e
         result = verify_speakers(
             enrolled_embedding=enrolled_emb,
             candidate_embedding=candidate_emb,
@@ -493,7 +507,11 @@ async def run_evaluation(req: EvaluationRunRequest) -> Dict[str, Any]:
         if canonical_key in embedding_cache:
             return embedding_cache[canonical_key]
         audio = load_and_validate_audio(path, min_duration_sec=DEFAULT_MIN_EVAL_AUDIO_DURATION_SEC)
-        emb = model.extract_embedding(audio.waveform)
+        try:
+            emb = model.extract_embedding(audio.waveform)
+        except Exception as e:
+            logger.exception("Model inference failed for audio file: %s", path)
+            raise RuntimeError(f"Model inference failed for {path}: {e}") from e
         embedding_cache[canonical_key] = emb
         return emb
 
