@@ -24,7 +24,14 @@ logger = logging.getLogger(__name__)
 
 # Default model identifier with revision pinning for supply chain security
 DEFAULT_MODEL_SOURCE = "speechbrain/spkrec-ecapa-voxceleb"
-DEFAULT_MODEL_REVISION = "main"  # Pin to specific commit hash in production
+DEFAULT_MODEL_REVISION = "0f99f2d0ebe89ac095bcc5903c4dd8f72b367286"  # exact HF commit (2025-02-18)
+MODEL_FILES = (
+    "hyperparams.yaml",
+    "embedding_model.ckpt",
+    "mean_var_norm_emb.ckpt",
+    "classifier.ckpt",
+    "label_encoder.txt",
+)
 DEFAULT_CACHE_DIR = "speechbrain_cache/spkrec-ecapa-voxceleb"
 
 
@@ -96,12 +103,27 @@ class SpeakerEmbeddingModel:
                 revision,
                 cache_path,
             )
+            # SpeechBrain's from_hparams has no revision option, so fetch the
+            # exact pinned revision ourselves and load from that local folder.
+            local_source = source
+            if not Path(source).is_dir():
+                from huggingface_hub import snapshot_download
+
+                local_source = snapshot_download(
+                    repo_id=source,
+                    revision=revision,
+                    local_dir=str(cache_path),
+                    allow_patterns=list(MODEL_FILES),
+                )
+            missing = [f for f in MODEL_FILES if not (Path(local_source) / f).exists()]
+            if missing:
+                raise FileNotFoundError(f"Model files missing: {', '.join(missing)}")
+
             classifier = EncoderClassifier.from_hparams(
-                source=source,
+                source=str(local_source),
                 savedir=str(cache_path),
                 run_opts=run_opts,
                 local_strategy=local_strategy,
-                revision=revision,
             )
             return cls(classifier=classifier, model_name=source)
         except Exception as e:
