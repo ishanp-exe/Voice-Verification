@@ -1,16 +1,18 @@
-torch>=2.0.0
-torchaudio>=2.0.0
-speechbrain>=1.0.0
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-python-multipart>=0.0.9
-slowapi>=0.1.9
-soundfile>=0.12.1
-numpy>=1.24.0
-scipy>=1.10.0
-pandas>=2.0.0
-matplotlib>=3.7.0
-pytest>=7.0.0
-httpx>=0.25.0
-streamlit>=1.30.0
-cryptography>=41.0.0
+# Runtime dependencies, pinned to the versions tested together (Python 3.10).
+# On Linux/CI install CPU-only PyTorch first:
+#   pip install torch==2.14.1 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1
+torchaudio==2.11.0
+speechbrain==1.1.1
+huggingface_hub==2.0.0
+fastapi==0.142.2
+uvicorn[standard]==0.54.0
+python-multipart==0.0.32
+slowapi==0.1.10
+soundfile==0.14.0
+numpy==2.2.6
+scipy==1.15.3
+pandas==2.3.3
+matplotlib==3.10.9
+streamlit==1.64.0
+cryptography==50.0.2
