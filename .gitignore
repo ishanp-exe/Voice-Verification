@@ -38,3 +38,6 @@ tmp/
 # OS specific
 .DS_Store
 Thumbs.db
+
+# graphify code map (kept on this computer only)
+graphify-out/
